@@ -1,0 +1,82 @@
+# Odak sırası (Tab/Shift+Tab), tıkla-odakla ve Checkbox.
+
+module test/focus_test
+
+import kilim/geom::{Rect, Size}
+import kilim/event::*
+import kilim/widget::*
+import kilim/box::*
+import kilim/ui::{Ui}
+import kilim/label::{Label}
+import kilim/button::{Button}
+import kilim/checkbox::{Checkbox}
+import kilim/testing::*
+
+class Log
+  property last : Bool? = nil
+  property n : Int32 = 0
+end
+
+def tab(ui : Ui, shift : Bool = false) : Nil
+  ui.dispatch KeyDown.new(Key::Tab, Mods.new(shift))
+end
+
+def click(ui : Ui, w : Widget) : Nil
+  x = w.bounds.x + w.bounds.w / 2
+  y = w.bounds.y + w.bounds.h / 2
+  ui.dispatch MouseMove.new(x, y)
+  ui.dispatch MouseDown.new(x, y, MouseButton::Left)
+  ui.dispatch MouseUp.new(x, y, MouseButton::Left)
+end
+
+def main : Int32
+  lg = Log.new
+  lbl = Label.new("baslik")
+  a = Button.new("a")
+  b = Checkbox.new("b", false, ->(v : Bool) { lg.last = v; lg.n += 1; nil })
+  c = Button.new("c")
+  col = Box.new(Axis::Column, [lbl, a, b, c] of Widget)
+  rc = RecordCanvas.new
+  ui = Ui.new(col, rc, MemoryClipboard.new)
+  ui.resize(300_f32, 300_f32)
+  ui.frame
+
+  tab(ui)
+  expect ui.focused == a, "Tab -> a"
+  tab(ui)
+  expect ui.focused == b, "Tab -> b"
+  tab(ui)
+  expect ui.focused == c, "Tab -> c"
+  tab(ui)
+  expect ui.focused == a, "Tab sarar"
+  tab(ui, true)
+  expect ui.focused == c, "Shift+Tab geriye sarar"
+
+  ui.focus(lbl)
+  expect ui.focused.nil?, "focusable olmayana odak verilmez"
+
+  click(ui, a)
+  expect ui.focused == a, "tıklama odaklar"
+  click(ui, lbl)
+  expect ui.focused.nil?, "label'a tıklama odağı temizler"
+
+  # checkbox
+  click(ui, b)
+  expect b.checked, "tıkla -> checked"
+  expect lg.last == true, "on_change(true)"
+  expect ui.focused == b, "checkbox odaklandı"
+  ui.dispatch KeyDown.new(Key::Space, Mods.new)
+  expect !b.checked, "Space -> unchecked"
+  expect lg.last == false && lg.n == 2, "on_change(false)"
+
+  # çizim: kutu + (checked iken) tik ve üstü çizili metin
+  b.checked = true
+  rc.calls.clear
+  ui.frame
+  expect rc.calls.count(&.starts_with?("line")) == 3, "tik (2) + strike (1) line"
+
+  puts "focus ok"
+  0
+end
+
+exit main

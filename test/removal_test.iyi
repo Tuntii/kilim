@@ -1,0 +1,40 @@
+# Handler içinde widget silinince Ui referans tutmaz.
+
+module test/removal_test
+
+import kilim/geom::{Rect, Size}
+import kilim/event::*
+import kilim/widget::*
+import kilim/box::*
+import kilim/ui::{Ui}
+import kilim/button::{Button}
+import kilim/checkbox::{Checkbox}
+import kilim/testing::*
+
+def main : Int32
+  list = Box.new(Axis::Column)
+  row = Box.new(Axis::Row)
+  list.add(row)
+  row.add(Checkbox.new("x"))
+  sil = Button.new("Sil", -> { list.remove(row); nil })
+  row.add(sil)
+  rc = RecordCanvas.new
+  ui = Ui.new(list, rc, MemoryClipboard.new)
+  ui.resize(300_f32, 200_f32)
+  ui.frame
+
+  x = sil.bounds.x + sil.bounds.w / 2
+  y = sil.bounds.y + sil.bounds.h / 2
+  ui.dispatch MouseMove.new(x, y)
+  ui.focus(sil)
+  ui.dispatch MouseDown.new(x, y, MouseButton::Left)
+  ui.dispatch MouseUp.new(x, y, MouseButton::Left)
+  expect list.children.empty?, "satır silindi"
+  expect ui.focused.nil? && ui.captured.nil? && ui.hovered.nil?, "silinen widget'a referans kalmadı"
+  ui.frame
+
+  puts "removal ok"
+  0
+end
+
+exit main

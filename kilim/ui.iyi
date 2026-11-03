@@ -43,6 +43,7 @@ pub class Ui < Context
   end
 
   pub def focus(w : Widget?) : Nil
+    w = nil if w && !w.focusable?
     return if w == @focused
     if o = @focused
       o.focused = false
@@ -63,6 +64,7 @@ pub class Ui < Context
       set_hover(@root.hit(e.x, e.y))
       # Olayı işleyen ilk widget capture alır; MouseUp ona gider.
       @captured = bubble(@hovered, e)
+      focus(focus_target(@hovered))
     when MouseUp
       if c = @captured
         c.handle(e, self)
@@ -71,13 +73,45 @@ pub class Ui < Context
     when Wheel
       bubble(@root.hit(e.x, e.y), e)
     when KeyDown, TextInput
-      if f = @focused
+      if e.is_a?(KeyDown) && e.key.tab?
+        move_focus(e.mods.shift ? -1 : 1)
+      elsif f = @focused
         f.handle(e, self)
       end
     when Resize
       resize(e.w, e.h)
     end
     sanitize
+  end
+
+  # Hedef ya da en yakın focusable atası.
+  def focus_target(start : Widget?) : Widget?
+    w = start
+    while w
+      return w if w.focusable?
+      w = w.parent
+    end
+    nil
+  end
+
+  # DFS sırası her seferinde yeniden hesaplanır; uçlarda sarar.
+  def move_focus(dir : Int32) : Nil
+    order = [] of Widget
+    collect(@root, order)
+    return if order.empty?
+    i = nil
+    if f = @focused
+      i = order.index(f)
+    end
+    n = order.size
+    j = i ? (i + dir) % n : (dir > 0 ? 0 : n - 1)
+    j += n if j < 0
+    focus(order[j])
+  end
+
+  def collect(w : Widget, acc : Array(Widget)) : Nil
+    acc << w if w.focusable?
+    w.children.each { |k| collect(k, acc) }
   end
 
   # Zinciri olay başlamadan dondurur: handler ağacı değiştirse de iterasyon bozulmaz.

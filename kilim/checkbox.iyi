@@ -1,0 +1,73 @@
+# Onay kutusu; tıklama ya da Space ile değişir.
+
+module kilim/checkbox
+
+import std/float
+import kilim/geom::{Rect, Size}
+import kilim/canvas::{Canvas}
+import kilim/event::*
+import kilim/widget::*
+import kilim/theme::*
+
+pub class Checkbox < Widget
+  getter text : String
+  property checked : Bool
+
+  def initialize(@text : String, @checked : Bool = false, @on_change : (Bool -> Nil)? = nil)
+  end
+
+  pub def focusable? : Bool
+    true
+  end
+
+  pub def preferred(c : Canvas) : Size
+    Size.new(CHECK_BOX + PADDING + c.measure(@text).w, CONTROL_H)
+  end
+
+  pub def draw(c : Canvas) : Nil
+    box = Rect.new(bounds.x, bounds.y + (bounds.h - CHECK_BOX) / 2, CHECK_BOX, CHECK_BOX)
+    c.fill_rect(box, pressed ? BUTTON_PRESSED : (hovered ? BUTTON_HOVER : BUTTON_BG))
+    c.stroke_rect(box, focused ? FOCUS_RING : BORDER)
+    if @checked
+      c.line(box.x + 3, box.y + 8, box.x + 7, box.y + 12, ACCENT)
+      c.line(box.x + 7, box.y + 12, box.x + 13, box.y + 4, ACCENT)
+    end
+    tx = box.x + CHECK_BOX + PADDING
+    ty = bounds.y + (bounds.h - c.line_height) / 2
+    c.text(tx, ty, @text, @checked ? MUTED : FG)
+    if @checked
+      sy = ty + c.line_height / 2
+      c.line(tx, sy, tx + c.measure(@text).w, sy, MUTED)
+    end
+  end
+
+  pub def handle(e : Event, ui : Context) : Bool
+    case e
+    when MouseDown
+      return false unless e.button.left?
+      self.pressed = true
+      invalidate
+      true
+    when MouseUp
+      return false unless pressed
+      self.pressed = false
+      invalidate
+      toggle if bounds.contains?(e.x, e.y)
+      true
+    when KeyDown
+      return false unless e.key.space?
+      toggle
+      true
+    else
+      false
+    end
+  end
+
+  def toggle : Nil
+    @checked = !@checked
+    invalidate
+    if f = @on_change
+      f.call(@checked)
+    end
+  end
+end
