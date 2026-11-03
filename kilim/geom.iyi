@@ -1,0 +1,49 @@
+# Geometri tipleri. Koordinatlar mantıksal birimdir, Float32.
+
+module kilim/geom
+
+import std/float
+
+pub struct Rect
+  getter x : Float32
+  getter y : Float32
+  getter w : Float32
+  getter h : Float32
+
+  def initialize(@x : Float32, @y : Float32, @w : Float32, @h : Float32)
+  end
+
+  # Sol/üst kenar dahil, sağ/alt kenar hariç.
+  pub def contains?(px : Float32, py : Float32) : Bool
+    px >= @x && px < @x + @w && py >= @y && py < @y + @h
+  end
+
+  # Kesişim yoksa w = h = 0.
+  pub def intersect(o : Rect) : Rect
+    x1 = @x > o.x ? @x : o.x
+    y1 = @y > o.y ? @y : o.y
+    r1 = @x + @w
+    r2 = o.x + o.w
+    b1 = @y + @h
+    b2 = o.y + o.h
+    x2 = r1 < r2 ? r1 : r2
+    y2 = b1 < b2 ? b1 : b2
+    return Rect.new(x1, y1, 0, 0) if x2 <= x1 || y2 <= y1
+    Rect.new(x1, y1, x2 - x1, y2 - y1)
+  end
+
+  # Her kenardan p kadar içeri; w/h asla negatif olmaz.
+  pub def inset(p : Float32) : Rect
+    w = @w - 2 * p
+    h = @h - 2 * p
+    Rect.new(@x + p, @y + p, w > 0 ? w : 0_f32, h > 0 ? h : 0_f32)
+  end
+end
+
+pub struct Size
+  getter w : Float32
+  getter h : Float32
+
+  def initialize(@w : Float32, @h : Float32)
+  end
+end

@@ -38,6 +38,10 @@ jobs:
           curl -fsSL "https://raw.githubusercontent.com/iyilang/iyi/v$IYI_VERSION/install.sh" | sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
+      # Çekirdek modüller SDL'siz; testler SDL kurulmadan koşar.
+      - name: Test
+        run: iyi test
+
       # --- SDL3 + SDL3_ttf ---
       - name: MSVC dev shell
         if: runner.os == 'Windows'

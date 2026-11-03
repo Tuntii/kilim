@@ -1,0 +1,26 @@
+# Çizim soyutlaması. Çekirdek modüller yalnızca bunu bilir; SDL'e dokunmaz.
+
+module kilim/canvas
+
+import kilim/geom::{Rect, Size}
+
+pub struct Color
+  getter r : UInt8
+  getter g : UInt8
+  getter b : UInt8
+  getter a : UInt8
+
+  def initialize(@r : UInt8, @g : UInt8, @b : UInt8, @a : UInt8 = 255_u8)
+  end
+end
+
+pub abstract class Canvas
+  pub abstract def fill_rect(r : Rect, c : Color) : Nil
+  pub abstract def stroke_rect(r : Rect, c : Color) : Nil
+  pub abstract def line(x1 : Float32, y1 : Float32, x2 : Float32, y2 : Float32, c : Color) : Nil
+  pub abstract def text(x : Float32, y : Float32, s : String, c : Color) : Nil
+  pub abstract def measure(s : String) : Size
+  pub abstract def line_height : Float32
+  pub abstract def push_clip(r : Rect) : Nil
+  pub abstract def pop_clip : Nil
+end

@@ -1,0 +1,55 @@
+# Test yardımcıları: expect/expect_eq ve çağrıları kaydeden RecordCanvas.
+
+module kilim/testing
+
+import kilim/geom::{Rect, Size}
+import kilim/canvas::{Canvas, Color}
+
+pub def expect(cond : Bool, msg : String) : Nil
+  return if cond
+  puts "FAIL: #{msg}"
+  exit 1
+end
+
+pub def expect_eq(a : T, b : U, msg : String) : Nil forall T, U
+  return if a == b
+  puts "FAIL: #{msg} (#{a.inspect} != #{b.inspect})"
+  exit 1
+end
+
+# Her karakter 8 px, satır yüksekliği 16. Çizim çağrılarını calls'a yazar.
+pub class RecordCanvas < Canvas
+  getter calls : Array(String) = [] of String
+
+  pub def fill_rect(r : Rect, c : Color) : Nil
+    @calls << "fill #{r.x},#{r.y},#{r.w},#{r.h}"
+  end
+
+  pub def stroke_rect(r : Rect, c : Color) : Nil
+    @calls << "stroke #{r.x},#{r.y},#{r.w},#{r.h}"
+  end
+
+  pub def line(x1 : Float32, y1 : Float32, x2 : Float32, y2 : Float32, c : Color) : Nil
+    @calls << "line #{x1},#{y1},#{x2},#{y2}"
+  end
+
+  pub def text(x : Float32, y : Float32, s : String, c : Color) : Nil
+    @calls << "text #{x},#{y},#{s}"
+  end
+
+  pub def measure(s : String) : Size
+    Size.new(s.size * 8_f32, 16_f32)
+  end
+
+  pub def line_height : Float32
+    16_f32
+  end
+
+  pub def push_clip(r : Rect) : Nil
+    @calls << "clip #{r.x},#{r.y},#{r.w},#{r.h}"
+  end
+
+  pub def pop_clip : Nil
+    @calls << "unclip"
+  end
+end

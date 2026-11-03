@@ -1,0 +1,96 @@
+# Widget tabanı ve boyutlandırma tipleri.
+
+module kilim/widget
+
+import kilim/geom::{Rect, Size}
+import kilim/canvas::{Canvas}
+import kilim/event::{Event}
+import kilim/ui::{Ui}
+
+pub enum SizeMode
+  Fit
+  Fixed
+  Fill
+end
+
+pub struct Sizing
+  getter mode : SizeMode
+  getter value : Float32
+
+  def initialize(@mode : SizeMode, @value : Float32 = 0_f32)
+  end
+
+  pub def self.fit : Sizing
+    Sizing.new(SizeMode::Fit)
+  end
+
+  pub def self.fixed(v : Float32) : Sizing
+    Sizing.new(SizeMode::Fixed, v)
+  end
+
+  # value = ağırlık.
+  pub def self.fill(weight : Float32 = 1.0_f32) : Sizing
+    Sizing.new(SizeMode::Fill, weight)
+  end
+end
+
+pub abstract class Widget
+  property bounds : Rect = Rect.new(0, 0, 0, 0)
+  property parent : Widget? = nil
+  property sizing : Sizing = Sizing.fit
+  # Yalnızca Ui yazar.
+  property hovered : Bool = false
+  property pressed : Bool = false
+  property focused : Bool = false
+  # Kökte anlamlı.
+  property needs_frame : Bool = false
+
+  pub def children : Array(Widget)
+    [] of Widget
+  end
+
+  pub abstract def preferred(c : Canvas) : Size
+  pub abstract def draw(c : Canvas) : Nil
+
+  pub def layout(r : Rect, c : Canvas) : Nil
+    @bounds = r
+  end
+
+  pub def focusable? : Bool
+    false
+  end
+
+  pub def handle(e : Event, ui : Ui) : Bool
+    false
+  end
+
+  pub def root : Widget
+    w = self
+    while p = w.parent
+      w = p
+    end
+    w
+  end
+
+  pub def invalidate : Nil
+    root.needs_frame = true
+  end
+
+  # En derin vurulan widget; çocuklarda sondan başa (üstte olan önce).
+  pub def hit(x : Float32, y : Float32) : Widget?
+    return nil unless @bounds.contains?(x, y)
+    kids = children
+    i = kids.size - 1
+    while i >= 0
+      if h = kids[i].hit(x, y)
+        return h
+      end
+      i -= 1
+    end
+    self
+  end
+
+  pub def attached_to?(r : Widget) : Bool
+    root == r
+  end
+end

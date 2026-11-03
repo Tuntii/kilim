@@ -1,0 +1,96 @@
+# Girdi olayları. Koordinatlar mantıksal birimdir.
+
+module kilim/event
+
+pub enum MouseButton
+  Left
+  Right
+  Middle
+end
+
+pub enum Key
+  Tab
+  Enter
+  Space
+  Backspace
+  Delete
+  Left
+  Right
+  Home
+  End
+  Escape
+  C
+  V
+  Other
+end
+
+# primary: Ctrl (Windows/Linux) ya da Cmd (macOS).
+pub struct Mods
+  getter shift : Bool
+  getter primary : Bool
+
+  def initialize(@shift : Bool = false, @primary : Bool = false)
+  end
+end
+
+pub abstract class Event
+end
+
+pub class MouseMove < Event
+  getter x : Float32
+  getter y : Float32
+
+  def initialize(@x : Float32, @y : Float32)
+  end
+end
+
+pub class MouseDown < Event
+  getter x : Float32
+  getter y : Float32
+  getter button : MouseButton
+
+  def initialize(@x : Float32, @y : Float32, @button : MouseButton)
+  end
+end
+
+pub class MouseUp < Event
+  getter x : Float32
+  getter y : Float32
+  getter button : MouseButton
+
+  def initialize(@x : Float32, @y : Float32, @button : MouseButton)
+  end
+end
+
+# Pozitif dy = yukarı.
+pub class Wheel < Event
+  getter x : Float32
+  getter y : Float32
+  getter dy : Float32
+
+  def initialize(@x : Float32, @y : Float32, @dy : Float32)
+  end
+end
+
+pub class KeyDown < Event
+  getter key : Key
+  getter mods : Mods
+
+  def initialize(@key : Key, @mods : Mods)
+  end
+end
+
+pub class TextInput < Event
+  getter text : String
+
+  def initialize(@text : String)
+  end
+end
+
+pub class Resize < Event
+  getter w : Float32
+  getter h : Float32
+
+  def initialize(@w : Float32, @h : Float32)
+  end
+end

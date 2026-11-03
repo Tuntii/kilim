@@ -1,0 +1,25 @@
+# Açık tema sabitleri (mantıksal birim).
+
+module kilim/theme
+
+import kilim/canvas::{Color}
+
+pub FONT_SIZE = 15_f32
+pub PADDING = 8_f32
+pub CONTROL_H = 30_f32
+pub CHECK_BOX = 16_f32
+pub SCROLLBAR_W = 6_f32
+pub WHEEL_STEP = 40_f32
+pub TEXTBOX_MIN_W = 120_f32
+pub BLINK_MS = 530
+
+pub BG = Color.new(250_u8, 250_u8, 252_u8)
+pub FG = Color.new(28_u8, 30_u8, 36_u8)
+pub MUTED = Color.new(120_u8, 124_u8, 134_u8)
+pub BORDER = Color.new(200_u8, 203_u8, 210_u8)
+pub ACCENT = Color.new(37_u8, 99_u8, 235_u8)
+pub BUTTON_BG = Color.new(235_u8, 237_u8, 242_u8)
+pub BUTTON_HOVER = Color.new(224_u8, 228_u8, 238_u8)
+pub BUTTON_PRESSED = Color.new(205_u8, 211_u8, 226_u8)
+pub FOCUS_RING = Color.new(96_u8, 150_u8, 250_u8)
+pub SCROLLBAR = Color.new(170_u8, 174_u8, 184_u8, 200_u8)

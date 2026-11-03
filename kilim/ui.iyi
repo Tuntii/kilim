@@ -1,0 +1,6 @@
+# Boş iskelet: Widget#handle imzası için gerekli. Gövdesi Task 4'te.
+
+module kilim/ui
+
+pub class Ui
+end

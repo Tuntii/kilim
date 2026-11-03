@@ -1,0 +1,66 @@
+# Widget ağacı: invalidate köke ulaşır, hit en derin çocuğu bulur.
+
+module test/widget_test
+
+import kilim/geom::{Rect, Size}
+import kilim/canvas::{Canvas, Color}
+import kilim/widget::*
+import kilim/testing::*
+
+class DummyWidget < Widget
+  def initialize(@w : Float32 = 40, @h : Float32 = 20)
+    self.sizing = Sizing.fixed(40)
+  end
+
+  def preferred(c : Canvas) : Size
+    Size.new(@w, @h)
+  end
+
+  def draw(c : Canvas) : Nil
+    c.fill_rect(bounds, Color.new(1_u8, 2_u8, 3_u8, 255_u8))
+  end
+
+  def add(w : Widget) : Nil
+    @kids << w
+    w.parent = self
+  end
+
+  def children : Array(Widget)
+    @kids
+  end
+
+  @kids = [] of Widget
+end
+
+def main : Int32
+  root = DummyWidget.new
+  child = DummyWidget.new
+  root.add(child)
+  root.bounds = Rect.new(0, 0, 100, 100)
+  child.bounds = Rect.new(0, 0, 40, 20)
+
+  expect !root.needs_frame, "başta needs_frame yok"
+  child.invalidate
+  expect root.needs_frame, "invalidate köke ulaşır"
+  expect_eq child.root, root, "root zinciri"
+  expect child.attached_to?(root), "attached_to?"
+  expect !root.attached_to?(child), "ters yön bağlı değil"
+
+  expect_eq root.hit(5, 5), child, "en derin vurulan çocuk"
+  expect_eq root.hit(60, 60), root, "çocuk vurulmadıysa self"
+  expect root.hit(999, 999).nil?, "dışarısı nil"
+
+  rc = RecordCanvas.new
+  expect_eq rc.measure("abc").w, 24_f32, "karakter 8 px"
+  expect_eq rc.line_height, 16_f32, "line_height 16"
+  root.layout(Rect.new(1, 2, 3, 4), rc)
+  expect_eq root.bounds.w, 3_f32, "varsayılan layout bounds = r"
+  child.draw(rc)
+  expect_eq rc.calls[0], "fill 0.0,0.0,40.0,20.0", "çağrı kaydı"
+  expect !Sizing.fit.mode.fixed?, "Sizing.fit"
+  expect_eq Sizing.fill.value, 1_f32, "fill ağırlığı 1"
+  puts "widget ok"
+  0
+end
+
+exit main
