@@ -1,4 +1,4 @@
-# Geometri tipleri. Koordinatlar mantıksal birimdir, Float32.
+# Geometry types. Coordinates are logical units, Float32.
 
 module kilim/geom
 
@@ -13,12 +13,12 @@ pub struct Rect
   def initialize(@x : Float32, @y : Float32, @w : Float32, @h : Float32)
   end
 
-  # Sol/üst kenar dahil, sağ/alt kenar hariç.
+  # Left/top edge inclusive, right/bottom edge exclusive.
   pub def contains?(px : Float32, py : Float32) : Bool
     px >= @x && px < @x + @w && py >= @y && py < @y + @h
   end
 
-  # Kesişim yoksa w = h = 0.
+  # If there is no intersection, w = h = 0.
   pub def intersect(o : Rect) : Rect
     x1 = @x > o.x ? @x : o.x
     y1 = @y > o.y ? @y : o.y
@@ -32,7 +32,7 @@ pub struct Rect
     Rect.new(x1, y1, x2 - x1, y2 - y1)
   end
 
-  # Her kenardan p kadar içeri; w/h asla negatif olmaz.
+  # Inset by p on every edge; w/h is never negative.
   pub def inset(p : Float32) : Rect
     w = @w - 2 * p
     h = @h - 2 * p

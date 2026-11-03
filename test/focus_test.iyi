@@ -1,4 +1,4 @@
-# Odak sırası (Tab/Shift+Tab), tıkla-odakla ve Checkbox.
+# Focus order (Tab/Shift+Tab), click-to-focus and Checkbox.
 
 module test/focus_test
 
@@ -31,7 +31,7 @@ end
 
 def main : Int32
   lg = Log.new
-  lbl = Label.new("baslik")
+  lbl = Label.new("title")
   a = Button.new("a")
   b = Checkbox.new("b", false, ->(v : Bool) { lg.last = v; lg.n += 1; nil })
   c = Button.new("c")
@@ -48,32 +48,32 @@ def main : Int32
   tab(ui)
   expect ui.focused == c, "Tab -> c"
   tab(ui)
-  expect ui.focused == a, "Tab sarar"
+  expect ui.focused == a, "Tab wraps"
   tab(ui, true)
-  expect ui.focused == c, "Shift+Tab geriye sarar"
+  expect ui.focused == c, "Shift+Tab wraps backwards"
 
   ui.focus(lbl)
-  expect ui.focused.nil?, "focusable olmayana odak verilmez"
+  expect ui.focused.nil?, "non-focusable gets no focus"
 
   click(ui, a)
-  expect ui.focused == a, "tıklama odaklar"
+  expect ui.focused == a, "click focuses"
   click(ui, lbl)
-  expect ui.focused.nil?, "label'a tıklama odağı temizler"
+  expect ui.focused.nil?, "clicking a label clears focus"
 
   # checkbox
   click(ui, b)
-  expect b.checked, "tıkla -> checked"
+  expect b.checked, "click -> checked"
   expect lg.last == true, "on_change(true)"
-  expect ui.focused == b, "checkbox odaklandı"
+  expect ui.focused == b, "checkbox focused"
   ui.dispatch KeyDown.new(Key::Space, Mods.new)
   expect !b.checked, "Space -> unchecked"
   expect lg.last == false && lg.n == 2, "on_change(false)"
 
-  # çizim: kutu + (checked iken) tik ve üstü çizili metin
+  # drawing: box + (when checked) check mark and strikethrough text
   b.checked = true
   rc.calls.clear
   ui.frame
-  expect rc.calls.count(&.starts_with?("line")) == 3, "tik (2) + strike (1) line"
+  expect rc.calls.count(&.starts_with?("line")) == 3, "check mark (2) + strike (1) lines"
 
   puts "focus ok"
   0

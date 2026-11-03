@@ -1,7 +1,7 @@
-# SDL backend'inin uçtan uca denemesi: bir Label ve Button'lı pencere açılır,
-# Tab + Space inject edilir, canlı resize yolu (event watch) denenir,
-# smoke.bmp kaydedilir ve run döngüsü QUIT ile biter. Başarıda `smoke ok`
-# yazar, 0 ile çıkar; aksi hâlde nedenini yazar, 1 ile çıkar.
+# End-to-end check of the SDL backend: opens a window with a Label and a Button,
+# injects Tab + Space, exercises the live resize path (event watch),
+# saves smoke.bmp and ends the run loop with QUIT. On success it prints
+# `smoke ok` and exits 0; otherwise it prints the reason and exits 1.
 
 module examples/smoke
 
@@ -53,41 +53,41 @@ end
 
 def main : Int32
   n = Counter.new
-  button = Button.new("Tamam", -> { n.n += 1; nil })
+  button = Button.new("OK", -> { n.n += 1; nil })
   root = Box.new(Axis::Column, [Label.new("Merhaba şöğüt"), button] of Widget, padding: PAD, spacing: 8_f32)
   win = Window.new("smoke", 320, 200, root)
   win.step
 
   win.inject KeyDown.new(Key::Tab, Mods.new)
-  fail("Tab butona odaklanmadı") unless button.focused
+  fail("Tab did not focus the button") unless button.focused
   win.inject KeyDown.new(Key::Space, Mods.new)
-  fail("Space sonrası sayaç #{n.n}, beklenen 1") unless n.n == 1
+  fail("counter after Space is #{n.n}, expected 1") unless n.n == 1
   win.step
 
-  # SDL olay çevirisi: kuyruğa konan gerçek SDL olayları da butona ulaşmalı.
+  # SDL event translation: real SDL events pushed onto the queue must reach the button too.
   cx = button.bounds.x + button.bounds.w / 2
   cy = button.bounds.y + button.bounds.h / 2
   push_button(LibSDL3::EVENT_MOUSE_BUTTON_DOWN, cx, cy)
   push_button(LibSDL3::EVENT_MOUSE_BUTTON_UP, cx, cy)
   push_key(LibSDL3::KEY_RETURN)
   win.step
-  fail("SDL tıklama + Enter sonrası sayaç #{n.n}, beklenen 3") unless n.n == 3
+  fail("counter after SDL click + Enter is #{n.n}, expected 3") unless n.n == 3
 
-  # Canlı resize yolu: SetWindowSize'ın ürettiği WINDOW_RESIZED, döngü hiç
-  # çalışmadan watch'ta layout + çizim yaptırmalı. Pencere yöneticisi hangi
-  # boyutu verdiyse buton genişliği ona uymalı.
+  # Live resize path: the WINDOW_RESIZED produced by SetWindowSize must trigger
+  # layout + drawing in the watch even though the loop has not run at all. Whatever
+  # size the window manager granted, the button width must match it.
   LibSDL3.SDL_SetWindowSize(win.handle, 400, 240)
   LibSDL3.SDL_SyncWindow(win.handle)
   w = h = 0
   LibSDL3.SDL_GetWindowSize(win.handle, pointerof(w), pointerof(h))
   expected = w - 2 * PAD
-  fail("resize sonrası buton genişliği #{button.bounds.w}, beklenen #{expected} (pencere #{w}x#{h})") unless button.bounds.w == expected
+  fail("button width after resize is #{button.bounds.w}, expected #{expected} (window #{w}x#{h})") unless button.bounds.w == expected
   puts "resize: #{w}x#{h}, density #{LibSDL3.SDL_GetWindowPixelDensity(win.handle)}"
 
   win.step
   win.screenshot("smoke.bmp")
 
-  # run'ın bekleyen döngüsü QUIT ile bitmeli (ve pencereyi kapatmalı).
+  # run's pending loop must end on QUIT (and close the window).
   quit = LibSDL3::Event.new
   quit.type = LibSDL3::EVENT_QUIT
   LibSDL3.SDL_PushEvent(pointerof(quit))

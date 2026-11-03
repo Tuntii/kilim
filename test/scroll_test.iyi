@@ -1,4 +1,4 @@
-# Scroll: kaydırma, clamp, vurulma, çizim.
+# Scroll: scrolling, clamp, hit testing, drawing.
 
 module test/scroll_test
 
@@ -45,27 +45,27 @@ end
 def main : Int32
   # test_wheel
   col, scroll, ui, rc = setup
-  expect_eq scroll.bounds.h, 200_f32, "viewport yüksekliği"
+  expect_eq scroll.bounds.h, 200_f32, "viewport height"
   3.times { wheel(ui, scroll, -1_f32) }
-  expect_eq scroll.offset, 120_f32, "3 tekerlek aşağı"
-  expect_eq col.bounds.y, -120_f32, "çocuk kaydı"
+  expect_eq scroll.offset, 120_f32, "3 wheel steps down"
+  expect_eq col.bounds.y, -120_f32, "child shifted"
   wheel(ui, scroll, 10_f32)
-  expect_eq scroll.offset, 0_f32, "yukarı clamp"
+  expect_eq scroll.offset, 0_f32, "clamp at top"
   wheel(ui, scroll, -1000_f32)
-  expect_eq scroll.offset, 30 * 40 - 200_f32, "aşağı clamp"
+  expect_eq scroll.offset, 30 * 40 - 200_f32, "clamp at bottom"
 
   # test_hit
   col, scroll, ui, rc = setup
   y = scroll.bounds.y + scroll.bounds.h + 5
   hidden = col.children[5]
-  expect hidden.bounds.contains?(10_f32, y), "gizli çocuğun bounds'u noktayı içerir"
-  expect scroll.root.hit(10_f32, y) == scroll.root, "görünmeyen tıklanmaz"
-  expect scroll.root.hit(10_f32, 5_f32) == col.children[0], "görünen vurulur"
+  expect hidden.bounds.contains?(10_f32, y), "hidden child's bounds contain the point"
+  expect scroll.root.hit(10_f32, y) == scroll.root, "invisible is not clickable"
+  expect scroll.root.hit(10_f32, 5_f32) == col.children[0], "visible is hit"
 
   # test_narrow
   col, scroll, ui, rc = setup
   scroll.layout(Rect.new(0_f32, 0_f32, 2_f32, 200_f32), rc)
-  expect col.bounds.w >= 0_f32, "negatif genişlik yok"
+  expect col.bounds.w >= 0_f32, "no negative width"
 
   # test_draw
   col, scroll, ui, rc = setup
@@ -73,9 +73,9 @@ def main : Int32
   scroll.invalidate
   ui.frame
   i = rc.calls.index { |s| s.starts_with?("clip") }
-  expect !i.nil?, "clip var"
-  expect rc.calls.includes?("unclip"), "unclip var"
-  expect rc.calls.any? { |s| s.starts_with?("fill 294") }, "thumb çizildi"
+  expect !i.nil?, "clip present"
+  expect rc.calls.includes?("unclip"), "unclip present"
+  expect rc.calls.any? { |s| s.starts_with?("fill 294") }, "thumb drawn"
 
   # test_offset_clamped_after_shrink
   col, scroll, ui, rc = setup
@@ -83,7 +83,7 @@ def main : Int32
   kids = col.children.dup
   25.times { |k| col.remove(kids[k]) }
   ui.frame
-  expect_eq scroll.offset, 0_f32, "içerik küçülünce offset düşer"
+  expect_eq scroll.offset, 0_f32, "offset drops when content shrinks"
 
   puts "scroll_test OK"
   0

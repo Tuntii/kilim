@@ -1,4 +1,4 @@
-# Girdi olayları. Koordinatlar mantıksal birimdir.
+# Input events. Coordinates are in logical units.
 
 module kilim/event
 
@@ -24,7 +24,7 @@ pub enum Key
   Other
 end
 
-# primary: Ctrl (Windows/Linux) ya da Cmd (macOS).
+# primary: Ctrl (Windows/Linux) or Cmd (macOS).
 pub struct Mods
   getter shift : Bool
   getter primary : Bool
@@ -62,7 +62,7 @@ pub class MouseUp < Event
   end
 end
 
-# Pozitif dy = yukarı.
+# Positive dy = up.
 pub class Wheel < Event
   getter x : Float32
   getter y : Float32

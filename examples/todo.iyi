@@ -1,6 +1,7 @@
-# Kabul örneği: yapılacaklar listesi. `KILIM_SELFTEST=<bmp yolu>` ayarlıysa
-# pencere elle kullanılmaz; olaylar inject edilir, sonuç doğrulanır, ekran
-# görüntüsü yazılır ve 0 ile çıkılır (doğrulama tutmazsa mesaj + çıkış 1).
+# Acceptance example: a to-do list. If `KILIM_SELFTEST=<bmp path>` is set,
+# the window is not used by hand; events are injected, the result is verified,
+# a screenshot is written and the program exits 0 (if verification fails:
+# message + exit 1).
 
 module examples/todo
 
@@ -15,7 +16,7 @@ import kilim/textbox::{Textbox}
 import kilim/scroll::{Scroll}
 import kilim/event::*
 
-# Sil düğmesinin kapanışı, kendi satırını ancak satır kurulduktan sonra bilir.
+# The Delete button's closure only learns its own row after the row is built.
 class Slot
   property row : Widget? = nil
 end
@@ -25,15 +26,15 @@ class App
   getter list : Box
   getter scroll : Scroll
   getter root : Box
-  # Self-test için satır başına onay kutusu ve Sil düğmesi (silinenler kalır).
+  # For the self-test: a checkbox and a Delete button per row (deleted ones stay).
   getter checks = [] of Checkbox
   getter dels = [] of Button
 
   def initialize
     @list = Kilim.column(spacing: 4)
     @scroll = Kilim.scroll(@list)
-    @input = Kilim.textbox("Yeni iş...", on_submit: ->(s : String) { add_text(s) })
-    add_btn = Kilim.button("Ekle", -> { add_text(@input.text) })
+    @input = Kilim.textbox("New task...", on_submit: ->(s : String) { add_text(s) })
+    add_btn = Kilim.button("Add", -> { add_text(@input.text) })
     top = Kilim.row([@input, add_btn] of Widget, spacing: 8)
     @root = Kilim.column([top, @scroll] of Widget, padding: 12, spacing: 8)
   end
@@ -43,7 +44,7 @@ class App
     return if text.empty?
     slot = Slot.new
     check = Kilim.checkbox(text, sizing: Kilim.fill)
-    del = Kilim.button("Sil", -> { remove(slot) })
+    del = Kilim.button("Delete", -> { remove(slot) })
     row = Kilim.row([check, del] of Widget, spacing: 8)
     slot.row = row
     @checks << check
@@ -80,30 +81,30 @@ end
 def selftest(win : Window, app : App, bmp : String) : Nil
   win.step
   win.inject KeyDown.new(Key::Tab, Mods.new)
-  fail("Tab textbox'a odaklanmadı") unless app.input.focused
+  fail("Tab did not focus the textbox") unless app.input.focused
   win.inject TextInput.new("Çalışma şöğüt ılık İzmir")
   win.inject KeyDown.new(Key::Enter, Mods.new)
-  fail("Enter sonrası #{app.list.children.size} satır, beklenen 1") unless app.list.children.size == 1
-  fail("Enter sonrası textbox boş değil: #{app.input.text}") unless app.input.text == ""
-  fail("satır metni #{app.checks[0].text}") unless app.checks[0].text == "Çalışma şöğüt ılık İzmir"
+  fail("#{app.list.children.size} rows after Enter, expected 1") unless app.list.children.size == 1
+  fail("textbox not empty after Enter: #{app.input.text}") unless app.input.text == ""
+  fail("row text is #{app.checks[0].text}") unless app.checks[0].text == "Çalışma şöğüt ılık İzmir"
 
   win.inject KeyDown.new(Key::Enter, Mods.new)
-  fail("boş Enter satır ekledi (#{app.list.children.size})") unless app.list.children.size == 1
+  fail("empty Enter added a row (#{app.list.children.size})") unless app.list.children.size == 1
 
   click(win, app.checks[0])
-  fail("ilk satır işaretlenmedi") unless app.checks[0].checked
+  fail("first row was not checked") unless app.checks[0].checked
 
   30.times { |i| app.add_text("İş #{i + 1} ığdır çğış") }
-  fail("30 ekleme sonrası #{app.list.children.size} satır, beklenen 31") unless app.list.children.size == 31
+  fail("#{app.list.children.size} rows after 30 adds, expected 31") unless app.list.children.size == 31
   wheel(win, app.scroll, -3_f32)
-  fail("tekerlek kaydırmadı (offset #{app.scroll.offset})") unless app.scroll.offset > 0
+  fail("wheel did not scroll (offset #{app.scroll.offset})") unless app.scroll.offset > 0
 
-  # Görünümün dışına kaydıran satırlar bilerek tıklanamaz; başa dön.
+  # Rows scrolled out of view are deliberately not clickable; scroll back to the top.
   wheel(win, app.scroll, 100_f32)
-  fail("başa dönülemedi (offset #{app.scroll.offset})") unless app.scroll.offset == 0
+  fail("could not scroll back to top (offset #{app.scroll.offset})") unless app.scroll.offset == 0
 
   click(win, app.dels[0])
-  fail("Sil sonrası #{app.list.children.size} satır, beklenen 30") unless app.list.children.size == 30
+  fail("#{app.list.children.size} rows after Delete, expected 30") unless app.list.children.size == 30
 
   win.step
   win.screenshot(bmp)

@@ -1,4 +1,4 @@
-# Tek satırlık metin düzenleme modeli. İmleç karakter indeksidir (bayt değil).
+# Single-line text editing model. The cursor is a character index (not a byte).
 
 module kilim/text_edit
 
@@ -15,7 +15,7 @@ pub class TextEdit
     join(0, @chars.size)
   end
 
-  # İmlecin solundaki metin.
+  # Text to the left of the cursor.
   pub def before_cursor : String
     join(0, @cursor)
   end

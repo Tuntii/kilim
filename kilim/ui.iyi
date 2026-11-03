@@ -1,4 +1,4 @@
-# Olay dağıtımı (hover/capture/focus) ve frame (layout + çizim). SDL'den bağımsız.
+# Event dispatch (hover/capture/focus) and frame (layout + drawing). Independent of SDL.
 
 module kilim/ui
 
@@ -32,7 +32,7 @@ pub class Ui < Context
     @root.needs_frame
   end
 
-  # Gerekliyse layout + çizim yapar; çizdiyse true.
+  # Does layout + drawing if needed; true if it drew.
   pub def frame : Bool
     return false unless @root.needs_frame
     @root.needs_frame = false
@@ -57,7 +57,7 @@ pub class Ui < Context
     @root.needs_frame = true
   end
 
-  # Odakta metin girişi bekleyen widget var mı (Window SDL text input'u açıp kapatır).
+  # Is there a widget with text input focus (Window turns SDL text input on and off).
   pub def wants_text_input? : Bool
     if f = @focused
       return f.wants_text_input?
@@ -65,7 +65,7 @@ pub class Ui < Context
     false
   end
 
-  # Window, BLINK_MS aralığıyla çağırır; yalnızca odaktaki widget'ı etkiler.
+  # Window calls this every BLINK_MS; it only affects the focused widget.
   pub def blink : Nil
     if f = @focused
       f.blink
@@ -79,7 +79,7 @@ pub class Ui < Context
       set_hover(@root.hit(e.x, e.y))
     when MouseDown
       set_hover(@root.hit(e.x, e.y))
-      # Olayı işleyen ilk widget capture alır; MouseUp ona gider.
+      # The first widget that handles the event gets capture; MouseUp goes to it.
       @captured = bubble(@hovered, e)
       focus(focus_target(@hovered))
     when MouseUp
@@ -101,7 +101,7 @@ pub class Ui < Context
     sanitize
   end
 
-  # Hedef ya da en yakın focusable atası.
+  # The target or its nearest focusable ancestor.
   def focus_target(start : Widget?) : Widget?
     w = start
     while w
@@ -111,7 +111,7 @@ pub class Ui < Context
     nil
   end
 
-  # DFS sırası her seferinde yeniden hesaplanır; uçlarda sarar.
+  # DFS order is recomputed every time; wraps at the ends.
   def move_focus(dir : Int32) : Nil
     order = [] of Widget
     collect(@root, order)
@@ -131,8 +131,8 @@ pub class Ui < Context
     w.children.each { |k| collect(k, acc) }
   end
 
-  # Zinciri olay başlamadan dondurur: handler ağacı değiştirse de iterasyon bozulmaz.
-  # İşleyen widget'ı döndürür.
+  # Freezes the chain before the event starts: iteration stays intact even if a handler changes the tree.
+  # Returns the widget that handled the event.
   def bubble(start : Widget?, e : Event) : Widget?
     chain = [] of Widget
     w = start
@@ -158,7 +158,7 @@ pub class Ui < Context
     @root.needs_frame = true
   end
 
-  # Ağaçtan kopan widget'lar hover/capture/focus'ta kalmasın.
+  # Widgets detached from the tree must not stay in hover/capture/focus.
   def sanitize : Nil
     if h = @hovered
       unless h.attached_to?(@root)

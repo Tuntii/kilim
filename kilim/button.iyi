@@ -1,4 +1,4 @@
-# Tıklanabilir düğme; Space/Enter ile de tetiklenir.
+# Clickable button; also triggered by Space/Enter.
 
 module kilim/button
 

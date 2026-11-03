@@ -1,4 +1,4 @@
-# Satır/sütun kapsayıcı. Çapraz eksen her zaman stretch.
+# Row/column container. The cross axis is always stretch.
 
 module kilim/box
 
@@ -38,7 +38,7 @@ pub class Box < Widget
     invalidate
   end
 
-  # Widget başka bir Box'taysa oradan çıkar: iki çocuk listesinde birden olmasın.
+  # If the widget is in another Box, remove it from there: it must not be in two child lists at once.
   def detach(w : Widget) : Nil
     if p = w.parent
       p.as(Box).remove(w) if p.is_a?(Box)

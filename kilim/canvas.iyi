@@ -1,4 +1,4 @@
-# Çizim soyutlaması. Çekirdek modüller yalnızca bunu bilir; SDL'e dokunmaz.
+# Drawing abstraction. Core modules only know this; they never touch SDL.
 
 module kilim/canvas
 

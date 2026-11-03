@@ -25,7 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # --- iyi 0.20.0 (installer de aynı etiketten, IYI_VERSION ile sabit) ---
+      # --- iyi 0.20.0 (installer from the same tag, pinned by IYI_VERSION) ---
       - name: Install iyi (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -38,7 +38,7 @@ jobs:
           curl -fsSL "https://raw.githubusercontent.com/iyilang/iyi/v$IYI_VERSION/install.sh" | sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      # Çekirdek modüller SDL'siz; testler SDL kurulmadan koşar.
+      # Core modules are SDL-free; tests run without SDL installed.
       - name: Test
         run: iyi test
 
@@ -72,11 +72,11 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           brew install sdl3 sdl3_ttf
-          # Homebrew'un lib dizini cc'nin varsayılan arama yolunda değil.
+          # Homebrew's lib directory is not on cc's default search path.
           echo "IYI_LIBRARY_PATH=$(brew --prefix)/lib" >> "$GITHUB_ENV"
 
-      # --- smoke (Window + SdlCanvas, smoke.bmp yazar): önce varsayılan video
-      # sürücüsü; pencere açılamazsa offscreen ---
+      # --- smoke (Window + SdlCanvas, writes smoke.bmp): default video
+      # driver first; offscreen if the window cannot be opened ---
       - name: Smoke
         shell: bash
         run: |
@@ -91,7 +91,7 @@ jobs:
             exit 1
           fi
 
-      # --- todo kabul örneği: olaylar inject edilir, todo.bmp yazılır ---
+      # --- todo acceptance example: events are injected, todo.bmp is written ---
       - name: Todo self-test
         shell: bash
         env:

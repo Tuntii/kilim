@@ -1,4 +1,4 @@
-# Test yardımcıları: expect/expect_eq ve çağrıları kaydeden RecordCanvas.
+# Test helpers: expect/expect_eq and RecordCanvas, which records calls.
 
 module kilim/testing
 
@@ -18,7 +18,7 @@ pub def expect_eq(a : T, b : U, msg : String) : Nil forall T, U
   exit 1
 end
 
-# Her karakter 8 px, satır yüksekliği 16. Çizim çağrılarını calls'a yazar.
+# Every character is 8 px, line height 16. Writes draw calls to calls.
 pub class RecordCanvas < Canvas
   getter calls : Array(String) = [] of String
 

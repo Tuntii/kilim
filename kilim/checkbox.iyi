@@ -1,4 +1,4 @@
-# Onay kutusu; tıklama ya da Space ile değişir.
+# Checkbox; toggled by click or Space.
 
 module kilim/checkbox
 

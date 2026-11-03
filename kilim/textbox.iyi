@@ -1,4 +1,4 @@
-# Tek satırlık metin kutusu; kaydırma imleci görünür tutar.
+# Single-line text box; scrolling keeps the caret visible.
 
 module kilim/textbox
 
@@ -117,7 +117,7 @@ pub class Textbox < Widget
     end
   end
 
-  # Her düzenlemeden sonra: imleç görünür, kaydırma düzelir, on_change (metin değiştiyse).
+  # After every edit: caret visible, scroll fixed up, on_change (if the text changed).
   def changed : Nil
     @caret_visible = true
     adjust_scroll
@@ -130,7 +130,7 @@ pub class Textbox < Widget
     end
   end
 
-  # İmleç x'i [bounds.x + PADDING, bounds.right - PADDING] içinde kalır.
+  # The caret x stays within [bounds.x + PADDING, bounds.right - PADDING].
   def adjust_scroll : Nil
     c = @canvas
     return unless c
@@ -141,7 +141,7 @@ pub class Textbox < Widget
     @scroll_x = 0_f32 if @scroll_x < 0
   end
 
-  # "\r\n" ve "\n" tek boşluk olur.
+  # "\r\n" and "\n" become a single space.
   def one_line(s : String) : String
     cs = [] of Char
     s.each_char { |ch| cs << ch }

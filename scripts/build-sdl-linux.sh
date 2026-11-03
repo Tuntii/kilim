@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Linux: SDL3 ve SDL3_ttf'yi sdl-versions.txt'teki etiketlerden kaynaktan
-# derler (SDL3_ttf, freetype/harfbuzz gömülü: SDLTTF_VENDORED=ON), PREFIX'e
-# (varsayılan vendor/linux, CI'da önbelleklenir) kurar ve /usr/local'a
-# kopyalar; böylece iyi'nin `cc` ile linklemesi ve çalışma zamanı ek ayar
-# istemez. Derleme bağımlılıklarını (cmake, ninja, X11 başlıkları) çağıran kurar.
+# Linux: builds SDL3 and SDL3_ttf from source at the tags in sdl-versions.txt
+# (SDL3_ttf with freetype/harfbuzz bundled: SDLTTF_VENDORED=ON), installs to PREFIX
+# (default vendor/linux, cached in CI) and copies to /usr/local, so
+# iyi's linking with `cc` and the runtime need no extra setup.
+# The caller installs the build dependencies (cmake, ninja, X11 headers).
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
-# KEY=VALUE satırları; SDL3 ve SDL3_TTF burada kullanılır.
+# KEY=VALUE lines; SDL3 and SDL3_TTF are used here.
 # shellcheck source=sdl-versions.txt
 . "$root/scripts/sdl-versions.txt"
 prefix=${PREFIX:-$root/vendor/linux}
@@ -32,5 +32,5 @@ fi
 
 sudo cp -a "$prefix/." /usr/local/
 sudo ldconfig
-echo "SDL3 $SDL3, SDL3_ttf $SDL3_TTF -> /usr/local (kaynak: $prefix)"
+echo "SDL3 $SDL3, SDL3_ttf $SDL3_TTF -> /usr/local (source: $prefix)"
 ls -l /usr/local/lib/libSDL3.so* /usr/local/lib/libSDL3_ttf.so*

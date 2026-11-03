@@ -1,4 +1,4 @@
-# Açık tema sabitleri (mantıksal birim).
+# Light theme constants (logical units).
 
 module kilim/theme
 

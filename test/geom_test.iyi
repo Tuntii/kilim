@@ -1,4 +1,4 @@
-# Rect geometrisi: dahil/hariç kenarlar, kesişim, inset.
+# Rect geometry: inclusive/exclusive edges, intersection, inset.
 
 module test/geom_test
 
@@ -7,15 +7,15 @@ import kilim/testing::*
 
 def main : Int32
   r = Rect.new(10, 10, 100, 50)
-  expect r.contains?(10, 10), "sol-üst dahil"
-  expect !r.contains?(110, 30), "sağ kenar hariç"
-  expect !r.contains?(50, 60), "alt kenar hariç"
-  expect_eq r.intersect(Rect.new(200, 0, 10, 10)).w, 0_f32, "kesişim yok -> w 0"
+  expect r.contains?(10, 10), "top-left inclusive"
+  expect !r.contains?(110, 30), "right edge exclusive"
+  expect !r.contains?(50, 60), "bottom edge exclusive"
+  expect_eq r.intersect(Rect.new(200, 0, 10, 10)).w, 0_f32, "no intersection -> w 0"
   i = r.intersect(Rect.new(50, 30, 100, 100))
-  expect_eq i.x, 50_f32, "kesişim x"
-  expect_eq i.w, 60_f32, "kesişim w"
-  expect_eq i.h, 30_f32, "kesişim h"
-  expect_eq Rect.new(0, 0, 4, 4).inset(8).w, 0_f32, "inset negatif olmaz"
+  expect_eq i.x, 50_f32, "intersection x"
+  expect_eq i.w, 60_f32, "intersection w"
+  expect_eq i.h, 30_f32, "intersection h"
+  expect_eq Rect.new(0, 0, 4, 4).inset(8).w, 0_f32, "inset is never negative"
   expect_eq Rect.new(0, 0, 40, 40).inset(8).x, 8_f32, "inset x"
   puts "geom ok"
   0

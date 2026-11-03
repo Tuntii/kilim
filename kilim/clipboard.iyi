@@ -1,4 +1,4 @@
-# Pano soyutlaması. SDL uygulaması kilim/sdl_* içinde; testte MemoryClipboard.
+# Clipboard abstraction. The SDL implementation is in kilim/sdl_*; tests use MemoryClipboard.
 
 module kilim/clipboard
 

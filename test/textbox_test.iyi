@@ -1,4 +1,4 @@
-# Textbox: giriş, pano, imleç görünürlüğü, Ui entegrasyonu.
+# Textbox: input, clipboard, caret visibility, Ui integration.
 
 module test/textbox_test
 
@@ -23,7 +23,7 @@ end
 
 def main : Int32
   lg = Log.new
-  tb = Textbox.new("ara", "", ->(s : String) { lg.changes += 1; nil }, ->(s : String) { lg.submitted = s; nil })
+  tb = Textbox.new("search", "", ->(s : String) { lg.changes += 1; nil }, ->(s : String) { lg.submitted = s; nil })
   btn = Button.new("x")
   col = Box.new(Axis::Column, [tb, btn] of Widget)
   rc = RecordCanvas.new
@@ -32,9 +32,9 @@ def main : Int32
   ui.resize(120_f32, 200_f32)
   ui.frame
 
-  expect !ui.wants_text_input?, "odak yokken false"
+  expect !ui.wants_text_input?, "false when nothing is focused"
   ui.focus(tb)
-  expect ui.wants_text_input?, "textbox odakta"
+  expect ui.wants_text_input?, "textbox focused"
 
   # placeholder
   tb.caret_visible = true
@@ -42,32 +42,32 @@ def main : Int32
   ui.focus(btn)
   ui.focus(tb)
   ui.frame
-  expect rc.calls.any? { |c| c.ends_with?(",ara") }, "boşken placeholder çizilir"
+  expect rc.calls.any? { |c| c.ends_with?(",search") }, "placeholder is drawn when empty"
   expect rc.calls.any? { |c| c.starts_with?("clip") }, "push_clip"
 
   s = "Çalışma şöğüt ılık İzmir"
   ui.dispatch TextInput.new(s)
-  expect_eq tb.text, s, "TextInput eklenir"
-  expect_eq lg.changes, 1, "on_change çağrıldı"
+  expect_eq tb.text, s, "TextInput is inserted"
+  expect_eq lg.changes, 1, "on_change called"
   key(ui, Key::Enter)
   expect_eq lg.submitted, s, "Enter -> on_submit"
 
   key(ui, Key::C, true)
-  expect_eq mem.get, s, "primary+C panoya"
+  expect_eq mem.get, s, "primary+C to clipboard"
   key(ui, Key::C)
   mem.set("a\nb")
   key(ui, Key::V, true)
-  expect_eq tb.text, s + "a b", "primary+V satır sonu boşluk"
+  expect_eq tb.text, s + "a b", "primary+V line break becomes a space"
   mem.set("c\r\nd")
   key(ui, Key::V, true)
-  expect tb.text.ends_with?("c d"), "CRLF tek boşluk"
+  expect tb.text.ends_with?("c d"), "CRLF becomes a single space"
 
   key(ui, Key::Backspace)
   key(ui, Key::Home)
   key(ui, Key::Delete)
-  expect tb.text.starts_with?("alışma"), "Home + Delete, Ç tek karakter"
+  expect tb.text.starts_with?("alışma"), "Home + Delete, Ç is a single character"
 
-  # imleç görünür kalır
+  # caret stays visible
   tb2 = Textbox.new
   ui2 = Ui.new(Box.new(Axis::Column, [tb2] of Widget), rc, mem)
   ui2.resize(120_f32, 100_f32)
@@ -76,25 +76,25 @@ def main : Int32
   ui2.dispatch TextInput.new("abcdefghijklmnopqrstuvwxyzabcdefghijklmn")
   ui2.frame
   caret_x = tb2.bounds.x + PADDING + rc.measure("abcdefghijklmnopqrstuvwxyzabcdefghijklmn").w - tb2.scroll_x
-  expect caret_x <= tb2.bounds.x + tb2.bounds.w - PADDING, "imleç görünür"
-  expect caret_x >= tb2.bounds.x + PADDING, "imleç solda taşmaz"
+  expect caret_x <= tb2.bounds.x + tb2.bounds.w - PADDING, "caret visible"
+  expect caret_x >= tb2.bounds.x + PADDING, "caret does not overflow on the left"
   ui2.dispatch KeyDown.new(Key::Home, Mods.new)
   expect_eq tb2.scroll_x, 0_f32, "Home -> scroll_x 0"
 
-  # blink ve odak
+  # blink and focus
   ui2.blink
-  expect !tb2.caret_visible, "blink gizler"
+  expect !tb2.caret_visible, "blink hides"
   ui2.blink
-  expect tb2.caret_visible, "blink gösterir"
+  expect tb2.caret_visible, "blink shows"
   ui2.blink
   ui2.focus(nil)
-  expect !ui2.wants_text_input?, "odak gidince false"
+  expect !ui2.wants_text_input?, "false once focus is gone"
   ui2.focus(tb2)
-  expect tb2.caret_visible, "odak değişince caret görünür"
+  expect tb2.caret_visible, "caret visible when focus changes"
   ui2.dispatch TextInput.new("z")
   ui2.blink
   ui2.dispatch TextInput.new("y")
-  expect tb2.caret_visible, "yazınca caret görünür"
+  expect tb2.caret_visible, "caret visible when typing"
 
   puts "textbox ok"
   0

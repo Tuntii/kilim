@@ -1,4 +1,4 @@
-# Dikey kaydırma kapsayıcısı; tek çocuğu clip ile gösterir.
+# Vertical scroll container; shows its single child through a clip.
 
 module kilim/scroll
 
@@ -53,7 +53,7 @@ pub class Scroll < Widget
     end
   end
 
-  # Görünür alanın dışındaki (kaydırılmış) çocuklar vurulamaz.
+  # Children outside the visible area (scrolled away) cannot be hit.
   pub def hit(x : Float32, y : Float32) : Widget?
     return nil unless @bounds.contains?(x, y)
     @child.hit(x, y) || self

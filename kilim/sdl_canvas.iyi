@@ -1,6 +1,6 @@
-# Canvas ve Clipboard'un SDL3/SDL3_ttf uygulaması. Çağıranlar mantıksal birim
-# verir; burada `density` ile piksele çevrilir, metin de bu yoğunlukta
-# rasterleştirilir (Retina'da keskin).
+# SDL3/SDL3_ttf implementation of Canvas and Clipboard. Callers pass logical
+# units; here they are converted to pixels with `density`, and text is also
+# rasterized at that density (sharp on Retina).
 
 module kilim/sdl_canvas
 
@@ -11,7 +11,7 @@ import kilim/canvas::{Canvas, Color}
 import kilim/clipboard::{Clipboard}
 import kilim/theme::*
 
-# Programa gömülü font (Noto Sans Regular, OFL: assets/fonts/OFL.txt).
+# Font embedded in the program (Noto Sans Regular, OFL: assets/fonts/OFL.txt).
 FONT_DATA = {{ read_file("#{__DIR__}/../assets/fonts/NotoSans-Regular.ttf") }}
 
 pub class SdlCanvas < Canvas
@@ -26,7 +26,7 @@ pub class SdlCanvas < Canvas
     LibSDL3.SDL_SetRenderDrawBlendMode(@renderer, LibSDL3::BLENDMODE_BLEND)
   end
 
-  # Pencere başka yoğunlukta bir ekrana taşınınca.
+  # When the window moves to a display with a different density.
   pub def set_density(d : Float32) : Nil
     return if d == @density
     @density = d
@@ -51,7 +51,7 @@ pub class SdlCanvas < Canvas
     LibSDL3.SDL_RenderLine(@renderer, x1 * d, y1 * d, x2 * d, y2 * d)
   end
 
-  # shortcut: her frame metin dokusu yeniden üretilir, büyük listelerde yavaşlarsa (metin, renk) önbelleğine geçilir
+  # shortcut: the text texture is regenerated every frame; if big lists get slow, switch to a (text, color) cache
   pub def text(x : Float32, y : Float32, s : String, c : Color) : Nil
     return if s.empty?
     surface = LibTTF.TTF_RenderText_Blended(@font, s.to_unsafe, s.bytesize.to_u64, sdl_color(c))
@@ -61,7 +61,7 @@ pub class SdlCanvas < Canvas
     return if texture.address == 0
     w = h = 0_f32
     LibSDL3.SDL_GetTextureSize(texture, pointerof(w), pointerof(h))
-    # Tam piksele yuvarlanır: kesirli konumda doku süzülür ve metin bulanıklaşır.
+    # Rounded to whole pixels: at a fractional position the texture gets filtered and the text blurs.
     dst = LibSDL3::FRect.new(x: (x * @density).round, y: (y * @density).round, w: w, h: h)
     LibSDL3.SDL_RenderTexture(@renderer, texture, Pointer(LibSDL3::FRect).new(0_u64), pointerof(dst))
     LibSDL3.SDL_DestroyTexture(texture)
@@ -100,7 +100,7 @@ pub class SdlCanvas < Canvas
     end
     r = @clips.last
     d = @density
-    # Dışa yuvarlanır: kenardaki yarım piksel kırpılmasın.
+    # Rounded outward: a half pixel at the edge must not be clipped.
     x0 = (r.x * d).floor
     y0 = (r.y * d).floor
     x1 = ((r.x + r.w) * d).ceil

@@ -1,20 +1,20 @@
 <#
-    SDL3 ve SDL3_ttf'nin Visual C++ geliştirme paketlerini (-VC.zip) indirir,
-    sdl-versions.txt'teki SHA256 ile doğrular ve vendor/windows/ altına açar.
-    Sonunda iyi'nin linkleyicisi ve çalışan program için ortamı ayarlar:
+    Downloads the Visual C++ development packages (-VC.zip) of SDL3 and SDL3_ttf,
+    verifies them against the SHA256 in sdl-versions.txt and extracts them under vendor/windows/.
+    Finally sets up the environment for iyi's linker and for the running program:
 
-      IYI_LIBRARY_PATH  SDL3.lib / SDL3_ttf.lib dizinleri (iyi bunları MSVC
-                        linkleyicisine /LIBPATH olarak verir)
-      PATH              SDL3.dll / SDL3_ttf.dll dizinleri (program çalışırken)
+      IYI_LIBRARY_PATH  SDL3.lib / SDL3_ttf.lib directories (iyi passes them to the
+                        MSVC linker as /LIBPATH)
+      PATH              SDL3.dll / SDL3_ttf.dll directories (while the program runs)
 
-    Ortamın oturumda kalması için nokta ile çalıştırın:
+    To keep the environment in your session, dot-source it:
 
       . .\scripts\fetch-sdl.ps1
 
-    GitHub Actions'ta GITHUB_ENV / GITHUB_PATH'e de yazar, sonraki adımlar görür.
+    On GitHub Actions it also writes to GITHUB_ENV / GITHUB_PATH so later steps see it.
 #>
 $ErrorActionPreference = 'Stop'
-# Windows PowerShell 5.1 eski bir TLS ile başlayabilir; GitHub 1.2 ister.
+# Windows PowerShell 5.1 may start with an old TLS; GitHub requires 1.2.
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
 $Root = Split-Path -Parent $PSScriptRoot
@@ -33,19 +33,19 @@ foreach ($pkg in @(
         @{ Repo = 'SDL_ttf'; Name = 'SDL3_ttf'; Key = 'SDL3_TTF' })) {
     $version = $Versions[$pkg.Key]
     $sha = $Versions["$($pkg.Key)_VC_SHA256"]
-    if (-not $version -or -not $sha) { throw "sdl-versions.txt: $($pkg.Key) ya da $($pkg.Key)_VC_SHA256 yok" }
+    if (-not $version -or -not $sha) { throw "sdl-versions.txt: $($pkg.Key) or $($pkg.Key)_VC_SHA256 is missing" }
 
     $zipName = "$($pkg.Name)-devel-$version-VC.zip"
     $zip = Join-Path $Download $zipName
     if (-not (Test-Path -LiteralPath $zip)) {
         $url = "https://github.com/libsdl-org/$($pkg.Repo)/releases/download/release-$version/$zipName"
-        Write-Host "indiriliyor: $url"
+        Write-Host "downloading: $url"
         Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
     }
     $actual = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLower()
     if ($actual -ne $sha.ToLower()) {
         Remove-Item -LiteralPath $zip -Force
-        throw "$zipName SHA256 tutmuyor: beklenen $sha, gelen $actual (dosya silindi)"
+        throw "$zipName SHA256 mismatch: expected $sha, got $actual (file deleted)"
     }
 
     $dir = Join-Path $Windows "$($pkg.Name)-$version"
@@ -58,13 +58,13 @@ foreach ($pkg in @(
     $LibDirs += $lib
 }
 
-# Step 3 bulgusu: iyi, @[Link("SDL3")] için SDL3.lib'i IYI_LIBRARY_PATH'teki
-# dizinlerde arar ve linkleyiciye verir (Crystal'ın CRYSTAL_LIBRARY_PATH'i gibi).
-# LIB ve --link-flags "/LIBPATH:..." de çalışıyor; tek yer olsun diye bu seçildi.
+# Step 3 finding: for @[Link("SDL3")], iyi looks for SDL3.lib in the directories
+# in IYI_LIBRARY_PATH and passes them to the linker (like Crystal's CRYSTAL_LIBRARY_PATH).
+# LIB and --link-flags "/LIBPATH:..." also work; this one was chosen to have a single place.
 $joined = $LibDirs -join ';'
 $env:IYI_LIBRARY_PATH = (@($joined, $env:IYI_LIBRARY_PATH) | Where-Object { $_ }) -join ';'
 $env:PATH = "$joined;$env:PATH"
 if ($env:GITHUB_ENV) { "IYI_LIBRARY_PATH=$env:IYI_LIBRARY_PATH" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV }
 if ($env:GITHUB_PATH) { $LibDirs | Out-File -Append -Encoding utf8 $env:GITHUB_PATH }
 Write-Host "IYI_LIBRARY_PATH=$env:IYI_LIBRARY_PATH"
-Write-Host "PATH'e eklendi: $joined"
+Write-Host "added to PATH: $joined"

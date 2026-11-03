@@ -1,4 +1,4 @@
-# Widget tabanı ve boyutlandırma tipleri.
+# Widget base and sizing types.
 
 module kilim/widget
 
@@ -28,7 +28,7 @@ pub struct Sizing
     Sizing.new(SizeMode::Fixed, v)
   end
 
-  # value = ağırlık.
+  # value = weight.
   pub def self.fill(weight : Float32 = 1.0_f32) : Sizing
     Sizing.new(SizeMode::Fill, weight)
   end
@@ -38,11 +38,11 @@ pub abstract class Widget
   property bounds : Rect = Rect.new(0, 0, 0, 0)
   property parent : Widget? = nil
   property sizing : Sizing = Sizing.fit
-  # Yalnızca Ui yazar.
+  # Only Ui writes this.
   property hovered : Bool = false
   property pressed : Bool = false
   property focused : Bool = false
-  # Kökte anlamlı.
+  # Meaningful at the root.
   property needs_frame : Bool = false
 
   pub def children : Array(Widget)
@@ -64,12 +64,12 @@ pub abstract class Widget
     false
   end
 
-  # Odaktaki widget metin girişi bekliyor mu (IME/ekran klavyesi için).
+  # Does the focused widget expect text input (for IME/on-screen keyboard).
   pub def wants_text_input? : Bool
     false
   end
 
-  # Ui, odak değişince ve blink zamanlayıcısında çağırır.
+  # Ui calls this when focus changes and on the blink timer.
   pub def focus_changed : Nil
   end
 
@@ -88,7 +88,7 @@ pub abstract class Widget
     root.needs_frame = true
   end
 
-  # En derin vurulan widget; çocuklarda sondan başa (üstte olan önce).
+  # The deepest widget hit; children are checked from last to first (topmost first).
   pub def hit(x : Float32, y : Float32) : Widget?
     return nil unless @bounds.contains?(x, y)
     kids = children
@@ -107,7 +107,7 @@ pub abstract class Widget
   end
 end
 
-# Widget'ların Ui'dan ihtiyaç duyduğu yüzey. Ui bunu uygular (widget -> ui döngüsünü önler).
+# The surface widgets need from Ui. Ui implements it (avoids a widget -> ui cycle).
 pub abstract class Context
   pub abstract def clipboard : Clipboard
   pub abstract def focused : Widget?

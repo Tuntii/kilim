@@ -1,6 +1,6 @@
 vendor/
 *.bmp
-# iyi build çıktıları
+# iyi build output
 *.exe
 *.pdb
 *.ilk

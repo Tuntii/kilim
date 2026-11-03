@@ -1,4 +1,4 @@
-# Box: satır/sütun yerleşimi, Fill payı, negatif boyut olmaması.
+# Box: row/column layout, Fill share, no negative sizes.
 
 module test/layout_test
 
@@ -24,7 +24,7 @@ end
 def main : Int32
   rc = RecordCanvas.new
 
-  # Sütun: Fixed(20) + Fill + Fill, padding 10, spacing 5
+  # Column: Fixed(20) + Fill + Fill, padding 10, spacing 5
   a = Dummy.new
   a.sizing = Sizing.fixed(20)
   b = Dummy.new
@@ -34,12 +34,12 @@ def main : Int32
   col = Box.new(Axis::Column, [a, b, c] of Widget, 10, 5)
   col.layout(Rect.new(0, 0, 200, 200), rc)
   expect a.bounds.x == 10 && a.bounds.y == 10 && a.bounds.w == 180 && a.bounds.h == 20, "fixed"
-  expect_eq b.bounds.h, 75_f32, "fill payı: (180-20-10)/2"
+  expect_eq b.bounds.h, 75_f32, "fill share: (180-20-10)/2"
   expect_eq b.bounds.y, 35_f32, "b y"
-  expect_eq c.bounds.y, 115_f32, "sıra + spacing"
-  expect_eq c.bounds.w, 180_f32, "çapraz stretch"
+  expect_eq c.bounds.y, 115_f32, "order + spacing"
+  expect_eq c.bounds.w, 180_f32, "cross-axis stretch"
 
-  # Satır, Fit
+  # Row, Fit
   d1 = Dummy.new
   d2 = Dummy.new
   d3 = Dummy.new
@@ -50,7 +50,7 @@ def main : Int32
   expect_eq d2.bounds.x, 44_f32, "row x"
   expect_eq d2.bounds.h, 50_f32, "row stretch"
 
-  # Parent yönetimi
+  # Parent management
   expect_eq d1.parent, row, "parent set"
   row.remove(d1)
   expect d1.parent.nil?, "parent cleared"
@@ -63,14 +63,14 @@ def main : Int32
   row.clear
   expect_eq row.children.size, 0, "clear"
 
-  # Sıfır rect
+  # Zero rect
   z = Box.new(Axis::Column, [Dummy.new, Dummy.new] of Widget, 10, 5)
   zf = Dummy.new
   zf.sizing = Sizing.fill
   z.add(zf)
   z.layout(Rect.new(0, 0, 0, 0), rc)
-  z.children.each { |w| expect w.bounds.w >= 0 && w.bounds.h >= 0, "negatif boyut yok" }
-  # Reparent: A'dan B'ye taşı
+  z.children.each { |w| expect w.bounds.w >= 0 && w.bounds.h >= 0, "no negative size" }
+  # Reparent: move from A to B
   ba = Box.new(Axis::Row)
   bb = Box.new(Axis::Row)
   mv = Dummy.new

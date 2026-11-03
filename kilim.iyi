@@ -1,10 +1,10 @@
-# kilim'in kullanıcı API'si: pencere, widget kurucuları ve boyut kısayolları.
-# Tipler (Widget, Label, Button, ...) kendi modüllerinde durur
-# (kilim/widget, kilim/label, ...); bu modülde yalnızca kurucu fonksiyonlar var.
-# Alt modüller `pub import` ile açılır: yalnızca `import github.com/tuntii/kilim`
-# ile `Kilim::Widget::Widget` gibi nitelikli adlar yazılabilir.
-# shortcut: tipler için `pub alias` yok (iyi, ad modül olduğundan reddediyor);
-# kısa ad için alt modülü ayrıca `::{Tip}` ile içe aktarın.
+# kilim's user API: window, widget constructors and sizing shortcuts.
+# The types (Widget, Label, Button, ...) live in their own modules
+# (kilim/widget, kilim/label, ...); this module only holds constructor functions.
+# Submodules are re-exported with `pub import`: with just
+# `import github.com/tuntii/kilim` you can write qualified names like `Kilim::Widget::Widget`.
+# shortcut: no `pub alias` for the types (iyi rejects it because the name is a module);
+# for a short name, import the submodule separately with `::{Type}`.
 
 module kilim
 

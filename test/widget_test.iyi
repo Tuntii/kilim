@@ -1,4 +1,4 @@
-# Widget ağacı: invalidate köke ulaşır, hit en derin çocuğu bulur.
+# Widget tree: invalidate reaches the root, hit finds the deepest child.
 
 module test/widget_test
 
@@ -39,26 +39,26 @@ def main : Int32
   root.bounds = Rect.new(0, 0, 100, 100)
   child.bounds = Rect.new(0, 0, 40, 20)
 
-  expect !root.needs_frame, "başta needs_frame yok"
+  expect !root.needs_frame, "no needs_frame at the start"
   child.invalidate
-  expect root.needs_frame, "invalidate köke ulaşır"
-  expect_eq child.root, root, "root zinciri"
+  expect root.needs_frame, "invalidate reaches the root"
+  expect_eq child.root, root, "root chain"
   expect child.attached_to?(root), "attached_to?"
-  expect !root.attached_to?(child), "ters yön bağlı değil"
+  expect !root.attached_to?(child), "reverse direction is not attached"
 
-  expect_eq root.hit(5, 5), child, "en derin vurulan çocuk"
-  expect_eq root.hit(60, 60), root, "çocuk vurulmadıysa self"
-  expect root.hit(999, 999).nil?, "dışarısı nil"
+  expect_eq root.hit(5, 5), child, "deepest child hit"
+  expect_eq root.hit(60, 60), root, "self if no child is hit"
+  expect root.hit(999, 999).nil?, "outside is nil"
 
   rc = RecordCanvas.new
-  expect_eq rc.measure("abc").w, 24_f32, "karakter 8 px"
+  expect_eq rc.measure("abc").w, 24_f32, "character is 8 px"
   expect_eq rc.line_height, 16_f32, "line_height 16"
   root.layout(Rect.new(1, 2, 3, 4), rc)
-  expect_eq root.bounds.w, 3_f32, "varsayılan layout bounds = r"
+  expect_eq root.bounds.w, 3_f32, "default layout bounds = r"
   child.draw(rc)
-  expect_eq rc.calls[0], "fill 0.0,0.0,40.0,20.0", "çağrı kaydı"
+  expect_eq rc.calls[0], "fill 0.0,0.0,40.0,20.0", "call record"
   expect !Sizing.fit.mode.fixed?, "Sizing.fit"
-  expect_eq Sizing.fill.value, 1_f32, "fill ağırlığı 1"
+  expect_eq Sizing.fill.value, 1_f32, "fill weight 1"
   puts "widget ok"
   0
 end

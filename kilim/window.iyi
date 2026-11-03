@@ -1,5 +1,5 @@
-# SDL penceresi ve olay döngüsü. SDL olaylarını kilim olaylarına çevirip
-# Ui'ye verir; Ui çizdiyse ekrana basar.
+# SDL window and event loop. Translates SDL events into kilim events and
+# hands them to Ui; if Ui drew, presents to the screen.
 
 module kilim/window
 
@@ -12,8 +12,8 @@ import kilim/widget::{Widget}
 import kilim/ui::{Ui}
 import kilim/theme::*
 
-# primary: macOS'ta Cmd, diğerlerinde Ctrl. Ctrl+Alt birlikteyse AltGr'dir
-# (Windows'ta böyle gelir; Lehçe AltGr+C = ć, Macarca AltGr+V = @): kısayol değil.
+# primary: Cmd on macOS, Ctrl elsewhere. Ctrl+Alt together means AltGr
+# (that's how it arrives on Windows; Polish AltGr+C = ć, Hungarian AltGr+V = @): not a shortcut.
 {% if flag?(:darwin) %}
   def primary_down?(mod : UInt16) : Bool
     mod & LibSDL3::KMOD_GUI != 0
@@ -26,7 +26,7 @@ import kilim/theme::*
 
 pub class Window
   getter ui : Ui
-  # Ham SDL_Window*; kilim'in bağlamadığı SDL çağrıları için.
+  # Raw SDL_Window*; for SDL calls kilim does not bind.
   getter handle : Void*
 
   def initialize(title : String, width : Int32, height : Int32, root : Widget)
@@ -42,11 +42,11 @@ pub class Window
     @quit = false
     @closed = false
     @text_input = false
-    # self'i vermeden önce her ivar dolu olmalı.
+    # Every ivar must be filled before handing out self.
     @watch_box = Pointer(Void).new(0_u64)
-    # Canlı resize: Windows/macOS'ta sürükleme sırasında olay döngüsü durur,
-    # ama SDL watch'ı her olayda eşzamanlı çağırır. Kilim'in tek C -> iyi
-    # callback'i budur. Closure değil; durumu userdata taşır.
+    # Live resize: on Windows/macOS the event loop stalls during a drag,
+    # but the SDL watch is called synchronously on every event. This is kilim's only
+    # C -> iyi callback. Not a closure; the state is carried by userdata.
     @watch = ->(data : Void*, ev : LibSDL3::Event*) do
       t = ev.value.type
       if t == LibSDL3::EVENT_WINDOW_RESIZED || t == LibSDL3::EVENT_WINDOW_EXPOSED
@@ -54,16 +54,16 @@ pub class Window
       end
       true
     end
-    # shortcut: watch pencereden sonra kaydedilir (self ancak tüm ivar'lar
-    # dolunca verilebilir); offscreen sürücüsünün SDL_CreateWindow içindeki
-    # ilk pencere olayları watch'a uğramaz ama kuyrukta kalır ve döngü işler.
-    # Kutu bu ivar'da yaşar: SDL'in elindeki tek kopya C tarafında, GC görmez.
+    # shortcut: the watch is registered after the window (self can only be handed out
+    # once all ivars are filled); the first window events the offscreen driver emits
+    # inside SDL_CreateWindow miss the watch but stay in the queue and the loop handles them.
+    # The box lives in this ivar: SDL's only copy is on the C side, invisible to the GC.
     @watch_box = Box.box(self)
     sdl_fatal("SDL_AddEventWatch") unless LibSDL3.SDL_AddEventWatch(@watch, @watch_box)
     relayout
   end
 
-  # Kapatılana kadar olayları bekler ve işler, sonra kapatır.
+  # Waits for and handles events until closed, then closes.
   pub def run : Nil
     present
     until @quit
@@ -82,7 +82,7 @@ pub class Window
     close
   end
 
-  # Beklemeden kuyruğu boşaltır ve gerekiyorsa bir frame çizer.
+  # Drains the queue without waiting and draws a frame if needed.
   pub def step : Nil
     drain
     present
@@ -92,8 +92,8 @@ pub class Window
     @ui.dispatch(e)
   end
 
-  # Tüm pencereyi yeniden çizip BMP olarak kaydeder. Present'ten sonra arka
-  # tampon tanımsız olduğu için önce yeniden çizilir, sonra okunur.
+  # Redraws the whole window and saves it as a BMP. After Present the back
+  # buffer is undefined, so it is redrawn first and then read.
   pub def screenshot(path : String) : Nil
     relayout
     @ui.frame
@@ -116,7 +116,7 @@ pub class Window
     LibSDL3.SDL_Quit
   end
 
-  # Watch'tan: boyut ne olursa olsun tüm pencere yeniden çizilir.
+  # From the watch: whatever the size, the whole window is redrawn.
   def redraw : Nil
     return if @closed
     relayout
@@ -128,7 +128,7 @@ pub class Window
     LibSDL3.SDL_RenderPresent(@renderer) if @ui.frame
   end
 
-  # Pencerenin mantıksal boyutunu Ui'ye verir (her zaman yeniden çizim ister).
+  # Hands the window's logical size to Ui (always requests a redraw).
   def relayout : Nil
     w = h = 0
     LibSDL3.SDL_GetWindowSize(@handle, pointerof(w), pointerof(h))
@@ -176,17 +176,17 @@ pub class Window
       end
     when LibSDL3::EVENT_MOUSE_WHEEL
       wh = ev.as(LibSDL3::MouseWheelEvent*).value
-      # FLIPPED (macOS "doğal kaydırma") olduğunda y zaten kullanıcının
-      # seçtiği yönde gelir; -1 ile çarpmak o tercihi tersine çevirirdi.
-      # Fiziksel yön gereken bir şey (ör. zoom) çıkarsa direction'a bakılır.
+      # When FLIPPED (macOS "natural scrolling"), y already arrives in the
+      # direction the user chose; multiplying by -1 would reverse that preference.
+      # If something needing the physical direction (e.g. zoom) appears, look at direction.
       @ui.dispatch Wheel.new(wh.mouse_x, wh.mouse_y, wh.y)
     when LibSDL3::EVENT_KEY_DOWN
       k = ev.as(LibSDL3::KeyboardEvent*).value
       mods = Mods.new(shift: k.mod & LibSDL3::KMOD_SHIFT != 0, primary: primary_down?(k.mod))
       @ui.dispatch KeyDown.new(key(k.key), mods)
     when LibSDL3::EVENT_TEXT_INPUT
-      # Bazı platformlar Ctrl/Cmd+C/V için de TEXT_INPUT yollar; o kısayoldur,
-      # metin değil (AltGr ise primary_down? false verir, metin geçer).
+      # Some platforms also send TEXT_INPUT for Ctrl/Cmd+C/V; that is a shortcut,
+      # not text (with AltGr, primary_down? is false and the text passes).
       return if primary_down?(LibSDL3.SDL_GetModState)
       @ui.dispatch TextInput.new(c_string(ev.as(LibSDL3::TextInputEvent*).value.text))
     end

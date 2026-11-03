@@ -1,4 +1,4 @@
-# TextEdit: karakter indeksli imleç, Türkçe karakterler.
+# TextEdit: character-indexed cursor, Turkish characters.
 
 module test/text_edit_test
 
@@ -8,32 +8,32 @@ import kilim/testing::*
 def main : Int32
   e = TextEdit.new
   e.insert("şöğüt")
-  expect_eq e.cursor, 5, "karakter sayısı, bayt değil"
+  expect_eq e.cursor, 5, "character count, not bytes"
   e.backspace
-  expect_eq e.text, "şöğü", "çok baytlı karakter tek seferde silinir"
+  expect_eq e.text, "şöğü", "multi-byte character is deleted in one go"
   e.home
   e.delete
-  expect_eq e.text, "öğü", "baştan sil"
+  expect_eq e.text, "öğü", "delete from the start"
   e.home
   e.left
-  expect_eq e.cursor, 0, "sınırda kalır"
+  expect_eq e.cursor, 0, "stays at the boundary"
   e.insert("İ")
   e.end_
   e.insert("ı")
-  expect_eq e.text, "İöğüı", "büyük İ ve noktasız ı"
+  expect_eq e.text, "İöğüı", "capital İ and dotless ı"
   e.end_
   e.right
   e.delete
-  expect_eq e.cursor, 5, "sağ sınır"
+  expect_eq e.cursor, 5, "right boundary"
   e.set("Çş")
-  expect_eq e.cursor, 2, "set imleci sona alır"
+  expect_eq e.cursor, 2, "set moves the cursor to the end"
   e.left
   e.insert("a")
-  expect_eq e.text, "Çaş", "ortaya ekle"
-  expect_eq e.before_cursor, "Ça", "imlece kadar"
+  expect_eq e.text, "Çaş", "insert in the middle"
+  expect_eq e.before_cursor, "Ça", "up to the cursor"
   e.home
   e.backspace
-  expect_eq e.text, "Çaş", "başta backspace etkisiz"
+  expect_eq e.text, "Çaş", "backspace at start has no effect"
   puts "text_edit ok"
   0
 end
