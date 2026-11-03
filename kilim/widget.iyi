@@ -64,6 +64,18 @@ pub abstract class Widget
     false
   end
 
+  # Odaktaki widget metin girişi bekliyor mu (IME/ekran klavyesi için).
+  pub def wants_text_input? : Bool
+    false
+  end
+
+  # Ui, odak değişince ve blink zamanlayıcısında çağırır.
+  pub def focus_changed : Nil
+  end
+
+  pub def blink : Nil
+  end
+
   pub def root : Widget
     w = self
     while p = w.parent

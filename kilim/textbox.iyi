@@ -1,0 +1,171 @@
+# Tek satırlık metin kutusu; kaydırma imleci görünür tutar.
+
+module kilim/textbox
+
+import std/float
+import kilim/geom::{Rect, Size}
+import kilim/canvas::{Canvas}
+import kilim/event::*
+import kilim/widget::*
+import kilim/theme::*
+import kilim/text_edit::{TextEdit}
+
+pub class Textbox < Widget
+  property caret_visible : Bool = true
+  getter scroll_x : Float32 = 0_f32
+
+  def initialize(@placeholder : String = "", text : String = "", @on_change : (String -> Nil)? = nil, @on_submit : (String -> Nil)? = nil)
+    @edit = TextEdit.new
+    @edit.set(text)
+    @canvas = nil
+    @last = text
+    @sizing = Sizing.fill
+  end
+
+  pub def text : String
+    @edit.text
+  end
+
+  pub def text=(s : String) : Nil
+    @edit.set(s)
+    changed
+  end
+
+  pub def focusable? : Bool
+    true
+  end
+
+  pub def wants_text_input? : Bool
+    true
+  end
+
+  pub def focus_changed : Nil
+    @caret_visible = true
+  end
+
+  pub def blink : Nil
+    @caret_visible = !@caret_visible
+    invalidate
+  end
+
+  pub def preferred(c : Canvas) : Size
+    Size.new(TEXTBOX_MIN_W, CONTROL_H)
+  end
+
+  pub def layout(r : Rect, c : Canvas) : Nil
+    @bounds = r
+    @canvas = c
+    adjust_scroll
+  end
+
+  pub def draw(c : Canvas) : Nil
+    c.fill_rect(bounds, BUTTON_BG)
+    c.stroke_rect(bounds, focused ? FOCUS_RING : BORDER)
+    ty = bounds.y + (bounds.h - c.line_height) / 2
+    c.push_clip(bounds.inset(PADDING / 2))
+    if @edit.size == 0
+      c.text(bounds.x + PADDING, ty, @placeholder, MUTED)
+    else
+      c.text(bounds.x + PADDING - @scroll_x, ty, @edit.text, FG)
+    end
+    if focused && @caret_visible
+      cx = bounds.x + PADDING + c.measure(@edit.before_cursor).w - @scroll_x
+      c.line(cx, ty, cx, ty + c.line_height, FG)
+    end
+    c.pop_clip
+  end
+
+  pub def handle(e : Event, ui : Context) : Bool
+    case e
+    when TextInput
+      @edit.insert(e.text)
+      changed
+      true
+    when KeyDown
+      case e.key
+      when Key::Backspace
+        @edit.backspace
+      when Key::Delete
+        @edit.delete
+      when Key::Left
+        @edit.left
+      when Key::Right
+        @edit.right
+      when Key::Home
+        @edit.home
+      when Key::End
+        @edit.end_
+      when Key::Enter
+        if f = @on_submit
+          f.call(@edit.text)
+        end
+        return true
+      when Key::C
+        return false unless e.mods.primary
+        ui.clipboard.set(@edit.text)
+        return true
+      when Key::V
+        return false unless e.mods.primary
+        @edit.insert(one_line(ui.clipboard.get))
+      else
+        return false
+      end
+      changed
+      true
+    else
+      false
+    end
+  end
+
+  # Her düzenlemeden sonra: imleç görünür, kaydırma düzelir, on_change (metin değiştiyse).
+  def changed : Nil
+    @caret_visible = true
+    adjust_scroll
+    invalidate
+    t = @edit.text
+    return if t == @last
+    @last = t
+    if f = @on_change
+      f.call(t)
+    end
+  end
+
+  # İmleç x'i [bounds.x + PADDING, bounds.right - PADDING] içinde kalır.
+  def adjust_scroll : Nil
+    c = @canvas
+    return unless c
+    cx = PADDING + c.measure(@edit.before_cursor).w
+    right = bounds.w - PADDING
+    @scroll_x = cx - right if cx - @scroll_x > right
+    @scroll_x = cx - PADDING if cx - @scroll_x < PADDING
+    @scroll_x = 0_f32 if @scroll_x < 0
+  end
+
+  # "\r\n" ve "\n" tek boşluk olur.
+  def one_line(s : String) : String
+    cs = [] of Char
+    s.each_char { |ch| cs << ch }
+    String.build do |b|
+      i = 0
+      while i < cs.size
+        ch = cs[i]
+        if ch == '\r' && i + 1 < cs.size && cs[i + 1] == '\n'
+          i += 1
+          b << ' '
+        elsif ch == '\r' || ch == '\n'
+          b << ' '
+        else
+          b << ch
+        end
+        i += 1
+      end
+    end
+  end
+
+  @placeholder : String
+  @on_change : (String -> Nil)?
+  @on_submit : (String -> Nil)?
+  @edit : TextEdit
+  @canvas : Canvas?
+  @last : String
+end

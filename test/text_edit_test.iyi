@@ -1,0 +1,41 @@
+# TextEdit: karakter indeksli imleç, Türkçe karakterler.
+
+module test/text_edit_test
+
+import kilim/text_edit::{TextEdit}
+import kilim/testing::*
+
+def main : Int32
+  e = TextEdit.new
+  e.insert("şöğüt")
+  expect_eq e.cursor, 5, "karakter sayısı, bayt değil"
+  e.backspace
+  expect_eq e.text, "şöğü", "çok baytlı karakter tek seferde silinir"
+  e.home
+  e.delete
+  expect_eq e.text, "öğü", "baştan sil"
+  e.home
+  e.left
+  expect_eq e.cursor, 0, "sınırda kalır"
+  e.insert("İ")
+  e.end_
+  e.insert("ı")
+  expect_eq e.text, "İöğüı", "büyük İ ve noktasız ı"
+  e.end_
+  e.right
+  e.delete
+  expect_eq e.cursor, 5, "sağ sınır"
+  e.set("Çş")
+  expect_eq e.cursor, 2, "set imleci sona alır"
+  e.left
+  e.insert("a")
+  expect_eq e.text, "Çaş", "ortaya ekle"
+  expect_eq e.before_cursor, "Ça", "imlece kadar"
+  e.home
+  e.backspace
+  expect_eq e.text, "Çaş", "başta backspace etkisiz"
+  puts "text_edit ok"
+  0
+end
+
+exit main

@@ -47,12 +47,29 @@ pub class Ui < Context
     return if w == @focused
     if o = @focused
       o.focused = false
+      o.focus_changed
     end
     @focused = w
     if n = w
       n.focused = true
+      n.focus_changed
     end
     @root.needs_frame = true
+  end
+
+  # Odakta metin girişi bekleyen widget var mı (Window SDL text input'u açıp kapatır).
+  pub def wants_text_input? : Bool
+    if f = @focused
+      return f.wants_text_input?
+    end
+    false
+  end
+
+  # Window, BLINK_MS aralığıyla çağırır; yalnızca odaktaki widget'ı etkiler.
+  pub def blink : Nil
+    if f = @focused
+      f.blink
+    end
   end
 
   pub def dispatch(e : Event) : Nil

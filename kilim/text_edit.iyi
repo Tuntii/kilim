@@ -1,0 +1,78 @@
+# Tek satırlık metin düzenleme modeli. İmleç karakter indeksidir (bayt değil).
+
+module kilim/text_edit
+
+import std/indexable
+
+pub class TextEdit
+  getter cursor : Int32 = 0
+
+  def initialize
+    @chars = [] of Char
+  end
+
+  pub def text : String
+    join(0, @chars.size)
+  end
+
+  # İmlecin solundaki metin.
+  pub def before_cursor : String
+    join(0, @cursor)
+  end
+
+  pub def size : Int32
+    @chars.size
+  end
+
+  pub def set(s : String) : Nil
+    @chars.clear
+    s.each_char { |ch| @chars << ch }
+    @cursor = @chars.size
+  end
+
+  pub def insert(s : String) : Nil
+    s.each_char do |ch|
+      @chars.insert(@cursor, ch)
+      @cursor += 1
+    end
+  end
+
+  pub def backspace : Nil
+    return if @cursor == 0
+    @cursor -= 1
+    @chars.delete_at(@cursor)
+  end
+
+  pub def delete : Nil
+    return if @cursor >= @chars.size
+    @chars.delete_at(@cursor)
+  end
+
+  pub def left : Nil
+    @cursor -= 1 if @cursor > 0
+  end
+
+  pub def right : Nil
+    @cursor += 1 if @cursor < @chars.size
+  end
+
+  pub def home : Nil
+    @cursor = 0
+  end
+
+  pub def end_ : Nil
+    @cursor = @chars.size
+  end
+
+  def join(from : Int32, upto : Int32) : String
+    String.build do |b|
+      i = from
+      while i < upto
+        b << @chars[i]
+        i += 1
+      end
+    end
+  end
+
+  @chars : Array(Char)
+end
