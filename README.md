@@ -5,6 +5,10 @@ top of SDL3. kilim draws its own widgets instead of using the operating
 system's controls, so an app looks the same everywhere. It runs on Windows,
 Linux and macOS.
 
+<p align="center">
+  <img src="assets/readme/demo.gif" alt="The kilim to-do example: typing tasks, ticking one off, scrolling the list and deleting a row" width="480">
+</p>
+
 ```crystal
 module main
 
@@ -24,6 +28,10 @@ exit main
 
 A bigger example is [`examples/todo.iyi`](examples/todo.iyi), a to-do list
 with a textbox, buttons, checkboxes, scrolling and Unicode (Turkish) text.
+
+<p align="center">
+  <img src="assets/readme/todo.png" alt="The to-do example with a ticked task, Turkish text and a scrollbar" width="480">
+</p>
 
 ## Installation
 
