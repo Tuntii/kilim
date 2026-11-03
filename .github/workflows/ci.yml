@@ -91,10 +91,28 @@ jobs:
             exit 1
           fi
 
-      - name: Upload screenshot
+      # --- todo kabul örneği: olaylar inject edilir, todo.bmp yazılır ---
+      - name: Todo self-test
+        shell: bash
+        env:
+          KILIM_SELFTEST: todo.bmp
+        run: |
+          if ${{ matrix.wrap }} iyi run examples/todo.iyi 2>&1 | tee todo.log; then
+            echo "video driver: default${{ matrix.wrap && ' (xvfb)' || '' }}"
+          elif grep -qE 'kilim: SDL_(Init|CreateWindow|CreateRenderer)' todo.log; then
+            echo "window could not be opened, retrying with SDL_VIDEO_DRIVER=offscreen"
+            SDL_VIDEO_DRIVER=offscreen iyi run examples/todo.iyi
+            echo "video driver: offscreen"
+          else
+            exit 1
+          fi
+
+      - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: smoke-${{ matrix.os }}
-          path: smoke.bmp
+          name: screenshots-${{ matrix.os }}
+          path: |
+            smoke.bmp
+            todo.bmp
           if-no-files-found: warn

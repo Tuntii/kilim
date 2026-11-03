@@ -1,0 +1,125 @@
+# Kabul örneği: yapılacaklar listesi. `KILIM_SELFTEST=<bmp yolu>` ayarlıysa
+# pencere elle kullanılmaz; olaylar inject edilir, sonuç doğrulanır, ekran
+# görüntüsü yazılır ve 0 ile çıkılır (doğrulama tutmazsa mesaj + çıkış 1).
+
+module examples/todo
+
+import std/float
+import kilim
+import kilim/widget::{Widget}
+import kilim/window::{Window}
+import kilim/box::{Box}
+import kilim/button::{Button}
+import kilim/checkbox::{Checkbox}
+import kilim/textbox::{Textbox}
+import kilim/scroll::{Scroll}
+import kilim/event::*
+
+# Sil düğmesinin kapanışı, kendi satırını ancak satır kurulduktan sonra bilir.
+class Slot
+  property row : Widget? = nil
+end
+
+class App
+  getter input : Textbox
+  getter list : Box
+  getter scroll : Scroll
+  getter root : Box
+  # Self-test için satır başına onay kutusu ve Sil düğmesi (silinenler kalır).
+  getter checks = [] of Checkbox
+  getter dels = [] of Button
+
+  def initialize
+    @list = Kilim.column(spacing: 4)
+    @scroll = Kilim.scroll(@list)
+    @input = Kilim.textbox("Yeni iş...", on_submit: ->(s : String) { add_text(s) })
+    add_btn = Kilim.button("Ekle", -> { add_text(@input.text) })
+    top = Kilim.row([@input, add_btn] of Widget, spacing: 8)
+    @root = Kilim.column([top, @scroll] of Widget, padding: 12, spacing: 8)
+  end
+
+  def add_text(raw : String) : Nil
+    text = raw.strip
+    return if text.empty?
+    slot = Slot.new
+    check = Kilim.checkbox(text, sizing: Kilim.fill)
+    del = Kilim.button("Sil", -> { remove(slot) })
+    row = Kilim.row([check, del] of Widget, spacing: 8)
+    slot.row = row
+    @checks << check
+    @dels << del
+    @list.add(row)
+    @input.text = ""
+  end
+
+  def remove(slot : Slot) : Nil
+    if r = slot.row
+      @list.remove(r)
+    end
+  end
+end
+
+def fail(why : String) : NoReturn
+  puts "todo FAIL: #{why}"
+  exit 1
+end
+
+def click(win : Window, w : Widget) : Nil
+  win.step
+  x = w.bounds.x + w.bounds.w / 2
+  y = w.bounds.y + w.bounds.h / 2
+  win.inject MouseDown.new(x, y, MouseButton::Left)
+  win.inject MouseUp.new(x, y, MouseButton::Left)
+end
+
+def wheel(win : Window, w : Widget, dy : Float32) : Nil
+  win.step
+  win.inject Wheel.new(w.bounds.x + w.bounds.w / 2, w.bounds.y + w.bounds.h / 2, dy)
+end
+
+def selftest(win : Window, app : App, bmp : String) : Nil
+  win.step
+  win.inject KeyDown.new(Key::Tab, Mods.new)
+  fail("Tab textbox'a odaklanmadı") unless app.input.focused
+  win.inject TextInput.new("Çalışma şöğüt ılık İzmir")
+  win.inject KeyDown.new(Key::Enter, Mods.new)
+  fail("Enter sonrası #{app.list.children.size} satır, beklenen 1") unless app.list.children.size == 1
+  fail("Enter sonrası textbox boş değil: #{app.input.text}") unless app.input.text == ""
+  fail("satır metni #{app.checks[0].text}") unless app.checks[0].text == "Çalışma şöğüt ılık İzmir"
+
+  win.inject KeyDown.new(Key::Enter, Mods.new)
+  fail("boş Enter satır ekledi (#{app.list.children.size})") unless app.list.children.size == 1
+
+  click(win, app.checks[0])
+  fail("ilk satır işaretlenmedi") unless app.checks[0].checked
+
+  30.times { |i| app.add_text("İş #{i + 1} ığdır çğış") }
+  fail("30 ekleme sonrası #{app.list.children.size} satır, beklenen 31") unless app.list.children.size == 31
+  wheel(win, app.scroll, -3_f32)
+  fail("tekerlek kaydırmadı (offset #{app.scroll.offset})") unless app.scroll.offset > 0
+
+  # Görünümün dışına kaydıran satırlar bilerek tıklanamaz; başa dön.
+  wheel(win, app.scroll, 100_f32)
+  fail("başa dönülemedi (offset #{app.scroll.offset})") unless app.scroll.offset == 0
+
+  click(win, app.dels[0])
+  fail("Sil sonrası #{app.list.children.size} satır, beklenen 30") unless app.list.children.size == 30
+
+  win.step
+  win.screenshot(bmp)
+  win.close
+  puts "todo selftest ok"
+end
+
+def main : Int32
+  app = App.new
+  win = Kilim.window("kilim todo", 480, 420, app.root)
+  if bmp = ENV["KILIM_SELFTEST"]?
+    selftest(win, app, bmp)
+  else
+    win.run
+  end
+  0
+end
+
+exit main

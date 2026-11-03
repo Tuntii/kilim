@@ -8,3 +8,4 @@ vendor/
 *.o
 /smoke
 smoke.log
+todo.log
