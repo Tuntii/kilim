@@ -56,12 +56,16 @@ def main : Int32
 
   # test_hit
   col, scroll, ui, rc = setup
-  wheel(ui, scroll, -1000_f32)
   y = scroll.bounds.y + scroll.bounds.h + 5
-  h = scroll.root.hit(10_f32, y)
-  expect h.nil? || !h.is_a?(Dummy), "görünmeyen tıklanmaz"
-  h2 = scroll.root.hit(10_f32, 5_f32)
-  expect h2.is_a?(Dummy), "görünen vurulur"
+  hidden = col.children[5]
+  expect hidden.bounds.contains?(10_f32, y), "gizli çocuğun bounds'u noktayı içerir"
+  expect scroll.root.hit(10_f32, y) == scroll.root, "görünmeyen tıklanmaz"
+  expect scroll.root.hit(10_f32, 5_f32) == col.children[0], "görünen vurulur"
+
+  # test_narrow
+  col, scroll, ui, rc = setup
+  scroll.layout(Rect.new(0_f32, 0_f32, 2_f32, 200_f32), rc)
+  expect col.bounds.w >= 0_f32, "negatif genişlik yok"
 
   # test_draw
   col, scroll, ui, rc = setup

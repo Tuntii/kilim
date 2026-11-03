@@ -30,7 +30,7 @@ pub class Scroll < Widget
     @bounds = r
     @content_h = @child.preferred(c).h
     clamp
-    @child.layout(Rect.new(r.x, r.y - @offset, r.w - SCROLLBAR_W, @content_h), c)
+    @child.layout(Rect.new(r.x, r.y - @offset, (r.w > SCROLLBAR_W ? r.w - SCROLLBAR_W : 0_f32), @content_h), c)
   end
 
   pub def handle(e : Event, ui : Context) : Bool
