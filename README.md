@@ -136,7 +136,7 @@ CI runs without a visible display, so check these by hand on a real screen:
 - On AltGr layouts (Polish AltGr+C, Hungarian AltGr+V), the character is typed
   and copy/paste is not triggered.
 
-CI screenshots are BMP files (the design document said PNG).
+CI screenshots are uploaded as BMP files.
 
 ## Fonts
 
