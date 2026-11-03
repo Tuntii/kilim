@@ -1,0 +1,87 @@
+# Core benchmarks: layout, draw traversal, hit-testing and typing, without SDL.
+# Run: iyi run bench/core.iyi
+
+module bench/core
+
+import std/float
+import bench/timing::{todo_tree, header, measure}
+
+import kilim/geom::{Rect, Size}
+import kilim/canvas::{Canvas, Color}
+import kilim/ui::{Ui}
+import kilim/widget::{Widget, Sizing}
+import kilim/box::{Box, Axis}
+import kilim/textbox::{Textbox}
+import kilim/event::*
+import kilim/testing::{MemoryClipboard}
+
+# Measures like RecordCanvas (8 px per character) but draws nothing, so the
+# numbers are kilim's own cost.
+class NullCanvas < Canvas
+  pub def fill_rect(r : Rect, c : Color) : Nil
+  end
+
+  pub def stroke_rect(r : Rect, c : Color) : Nil
+  end
+
+  pub def line(x1 : Float32, y1 : Float32, x2 : Float32, y2 : Float32, c : Color) : Nil
+  end
+
+  pub def text(x : Float32, y : Float32, s : String, c : Color) : Nil
+  end
+
+  pub def measure(s : String) : Size
+    Size.new(s.size * 8_f32, 16_f32)
+  end
+
+  pub def line_height : Float32
+    16_f32
+  end
+
+  pub def push_clip(r : Rect) : Nil
+  end
+
+  pub def pop_clip : Nil
+  end
+end
+
+def main : Int32
+  header("Core (no SDL)")
+  [100, 1000, 10000].each do |n|
+    root = todo_tree(n)
+    ui = Ui.new(root, NullCanvas.new, MemoryClipboard.new)
+    ui.resize(480_f32, 420_f32)
+    ui.frame
+
+    measure("full frame (layout + draw)", n, 1500.0, -> { root.invalidate; ui.frame; nil })
+
+    # 100 pointer moves between two rows; each one changes the hovered widget.
+    measure("100 mouse moves (hit-test + hover)", n, 1500.0, -> {
+      50.times do
+        ui.dispatch MouseMove.new(40_f32, 70_f32)
+        ui.dispatch MouseMove.new(40_f32, 110_f32)
+      end
+      nil
+    })
+
+    # 50 keystrokes into a textbox above the list, a frame after each.
+    tb = Textbox.new("type here")
+    tb.sizing = Sizing.fit
+    top = Box.new(Axis::Column, [tb, root] of Widget)
+    ui2 = Ui.new(top, NullCanvas.new, MemoryClipboard.new)
+    ui2.resize(480_f32, 420_f32)
+    ui2.focus(tb)
+    ui2.frame
+    measure("50 keystrokes, frame after each", n, 1500.0, -> {
+      50.times do
+        ui2.dispatch TextInput.new("a")
+        ui2.frame
+      end
+      tb.text = ""
+      nil
+    })
+  end
+  0
+end
+
+exit main

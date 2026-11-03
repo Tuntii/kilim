@@ -111,6 +111,19 @@ self-hosted runner: the Linux VBOT server, and a real Mac.
   Results are kept as CI artifacts. A release is blocked by a regression
   beyond an agreed threshold. Hosted runners are noisy, so compare medians of
   several runs.
+
+  Started: `bench/core.iyi` and `bench/render.iyi` run in CI on every platform
+  and report to the job summary. Still to do: the idle wake-up count and the
+  regression gate. First numbers on a Windows desktop:
+
+  | Full frame, to-do list | 100 rows | 1,000 rows | 10,000 rows |
+  |---|---:|---:|---:|
+  | kilim core (layout + draw calls) | 0.08 ms | 0.8 ms | 10.5 ms |
+  | Real SDL window (text included) | 19 ms | 184 ms | 1,805 ms |
+
+  Nearly all of the time goes to rasterising text. Every row is drawn, even
+  rows outside the scroll viewport. Two fixes follow from this: skip widgets
+  that lie outside the clip rectangle, and cache text.
 - **Text cache:** render through SDL3_ttf's text engine and a glyph atlas
   (`TTF_CreateRendererTextEngine`) instead of rasterising strings on every
   draw.

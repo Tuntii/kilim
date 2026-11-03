@@ -107,6 +107,23 @@ jobs:
             exit 1
           fi
 
+      # --- benchmarks: report only (hosted runners are noisy), shown in the job summary ---
+      - name: Benchmarks
+        shell: bash
+        run: |
+          echo "## Benchmarks: ${{ matrix.os }}" > bench.md
+          iyi run bench/core.iyi | tee -a bench.md
+          ${{ matrix.wrap }} iyi run bench/render.iyi | tee -a bench.md
+          cat bench.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-${{ matrix.os }}
+          path: bench.md
+          if-no-files-found: warn
+
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v4

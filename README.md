@@ -156,6 +156,15 @@ iyi run examples/todo.iyi                           # the to-do example
 KILIM_SELFTEST=todo.bmp iyi run examples/todo.iyi   # hands-off acceptance test, writes todo.bmp
 ```
 
+Benchmarks print Markdown tables (median and 95th percentile per case, for
+100, 1,000 and 10,000 list rows). CI runs them on every platform and shows the
+results in the job summary:
+
+```sh
+iyi run bench/core.iyi     # layout, draw traversal, hit-testing, typing; no SDL
+iyi run bench/render.iyi   # one full frame in a real SDL window, text included
+```
+
 To use a local clone from another project, add
 `replace github.com/tuntii/kilim => ../kilim` to that project's `iyi.mod`. The
 module path is lower-case because iyi does not allow upper-case paths.
@@ -175,7 +184,10 @@ kilim is at **v0.1**: small, tested, and young. Not there yet:
 - mobile and web.
 
 Every change redraws the whole window, and text is rasterised again on each
-draw. Making that fast, and adding a GPU backend, comes first in the
+draw, including rows scrolled out of view. On a Windows desktop a full frame
+of the to-do list takes about 19 ms with 100 rows and 180 ms with 1,000 rows;
+kilim's own layout and draw work is under 1 ms of that, and the rest is text
+rendering. Making that fast, and adding a GPU backend, comes first in the
 [roadmap](ROADMAP.md). Progress is tracked on the
 [project board](https://github.com/users/Tuntii/projects/4).
 

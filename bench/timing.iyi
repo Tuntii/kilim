@@ -1,0 +1,57 @@
+# Shared helpers for the benchmark programs: build a to-do-like tree and time
+# a piece of work, printing one Markdown table row per case.
+
+module bench/timing
+
+import std/time::{Time}
+import kilim/widget::{Widget, Sizing}
+import kilim/box::{Box, Axis}
+import kilim/button::{Button}
+import kilim/checkbox::{Checkbox}
+import kilim/scroll::{Scroll}
+
+# Root column with a scrolled list of `n` rows: [checkbox(text, fill), "Delete"].
+# Built from the widget classes, not the `Kilim` builders, so that the core
+# benchmark does not link SDL.
+pub def todo_tree(n : Int32) : Box
+  list = Box.new(Axis::Column, spacing: 4_f32)
+  n.times do |i|
+    check = Checkbox.new("Task #{i + 1}: profile the renderer")
+    check.sizing = Sizing.fill
+    list.add Box.new(Axis::Row, [check, Button.new("Delete")] of Widget, spacing: 8_f32)
+  end
+  scroll = Scroll.new(list)
+  scroll.sizing = Sizing.fill
+  Box.new(Axis::Column, [scroll] of Widget, 12_f32, 8_f32)
+end
+
+pub def header(title : String) : Nil
+  puts ""
+  puts "### #{title}"
+  puts ""
+  puts "| case | rows | median ms | p95 ms | runs |"
+  puts "|---|---:|---:|---:|---:|"
+end
+
+# Runs `work` twice to warm up, then until `budget_ms` is spent (at least 3,
+# at most 200 runs), and prints the median and 95th percentile.
+pub def measure(name : String, rows : Int32, budget_ms : Float64, work : -> Nil) : Nil
+  2.times { work.call }
+  samples = [] of Float64
+  spent = 0.0
+  while samples.size < 3 || (spent < budget_ms && samples.size < 200)
+    t0 = Time.monotonic
+    work.call
+    ms = (Time.monotonic - t0).total_milliseconds
+    samples << ms
+    spent += ms
+  end
+  samples.sort_in_place
+  median = samples[samples.size // 2]
+  p95 = samples[((samples.size - 1) * 95) // 100]
+  puts "| #{name} | #{rows} | #{fmt(median)} | #{fmt(p95)} | #{samples.size} |"
+end
+
+def fmt(ms : Float64) : String
+  ((ms * 1000).round / 1000).to_s
+end

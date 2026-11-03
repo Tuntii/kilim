@@ -1,0 +1,22 @@
+# Rendering benchmarks: one full frame in a real SDL window, text included.
+# Run (SDL on PATH / IYI_LIBRARY_PATH, see README): iyi run bench/render.iyi
+
+module bench/render
+
+import bench/timing::{todo_tree, header, measure}
+import kilim
+
+def main : Int32
+  driver = ENV["SDL_RENDER_DRIVER"]? || "default"
+  header("Render (SDL, renderer: #{driver})")
+  [100, 1000, 10000].each do |n|
+    root = todo_tree(n)
+    win = Kilim.window("kilim bench", 480, 420, root)
+    win.step
+    measure("full frame (layout + draw + present)", n, 3000.0, -> { root.invalidate; win.step; nil })
+    win.close
+  end
+  0
+end
+
+exit main
