@@ -1,0 +1,113 @@
+# Satır/sütun kapsayıcı. Çapraz eksen her zaman stretch.
+
+module kilim/box
+
+import std/float
+import std/indexable
+import kilim/geom::{Rect, Size}
+import kilim/canvas::{Canvas}
+import kilim/widget::*
+
+pub enum Axis
+  Row
+  Column
+end
+
+pub class Box < Widget
+  def initialize(@axis : Axis, children : Array(Widget) = [] of Widget, @padding : Float32 = 0_f32, @spacing : Float32 = 0_f32, sizing : Sizing = Sizing.fit)
+    @kids = [] of Widget
+    self.sizing = sizing
+    children.each { |w| add(w) }
+  end
+
+  pub def children : Array(Widget)
+    @kids
+  end
+
+  pub def add(w : Widget) : Nil
+    @kids << w
+    w.parent = self
+    invalidate
+  end
+
+  pub def insert(i : Int32, w : Widget) : Nil
+    @kids.insert(i, w)
+    w.parent = self
+    invalidate
+  end
+
+  pub def remove(w : Widget) : Nil
+    if @kids.delete(w)
+      w.parent = nil
+    end
+    invalidate
+  end
+
+  pub def clear : Nil
+    @kids.each { |w| w.parent = nil }
+    @kids.clear
+    invalidate
+  end
+
+  pub def preferred(c : Canvas) : Size
+    main = 0_f32
+    cross = 0_f32
+    @kids.each do |w|
+      s = w.preferred(c)
+      m = w.sizing.mode.fixed? ? w.sizing.value : (@axis.row? ? s.w : s.h)
+      x = @axis.row? ? s.h : s.w
+      main += m
+      cross = x if x > cross
+    end
+    gaps = @kids.size > 1 ? @spacing * (@kids.size - 1) : 0_f32
+    main += gaps + 2 * @padding
+    cross += 2 * @padding
+    @axis.row? ? Size.new(main, cross) : Size.new(cross, main)
+  end
+
+  pub def layout(r : Rect, c : Canvas) : Nil
+    @bounds = r
+    inner = r.inset(@padding)
+    row = @axis.row?
+    inner_main = row ? inner.w : inner.h
+    inner_cross = row ? inner.h : inner.w
+    n = @kids.size
+    used = 0_f32
+    weights = 0_f32
+    @kids.each do |w|
+      case w.sizing.mode
+      when SizeMode::Fill  then weights += w.sizing.value
+      when SizeMode::Fixed then used += w.sizing.value
+      else
+        s = w.preferred(c)
+        used += row ? s.w : s.h
+      end
+    end
+    gaps = n > 1 ? @spacing * (n - 1) : 0_f32
+    free = inner_main - used - gaps
+    free = 0_f32 if free < 0
+    pos = row ? inner.x : inner.y
+    @kids.each do |w|
+      size = case w.sizing.mode
+             when SizeMode::Fill  then weights > 0 ? free * w.sizing.value / weights : 0_f32
+             when SizeMode::Fixed then w.sizing.value
+             else
+               s = w.preferred(c)
+               row ? s.w : s.h
+             end
+      size = 0_f32 if size < 0
+      if row
+        w.layout(Rect.new(pos, inner.y, size, inner_cross), c)
+      else
+        w.layout(Rect.new(inner.x, pos, inner_cross, size), c)
+      end
+      pos += size + @spacing
+    end
+  end
+
+  pub def draw(c : Canvas) : Nil
+    @kids.each { |w| w.draw(c) }
+  end
+
+  @kids : Array(Widget)
+end

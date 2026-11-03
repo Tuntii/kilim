@@ -1,0 +1,77 @@
+# Box: satır/sütun yerleşimi, Fill payı, negatif boyut olmaması.
+
+module test/layout_test
+
+import std/float
+import kilim/geom::{Rect, Size}
+import kilim/canvas::{Canvas, Color}
+import kilim/widget::*
+import kilim/box::*
+import kilim/testing::*
+
+class Dummy < Widget
+  def initialize(@w : Float32 = 40, @h : Float32 = 20)
+  end
+
+  def preferred(c : Canvas) : Size
+    Size.new(@w, @h)
+  end
+
+  def draw(c : Canvas) : Nil
+  end
+end
+
+def main : Int32
+  rc = RecordCanvas.new
+
+  # Sütun: Fixed(20) + Fill + Fill, padding 10, spacing 5
+  a = Dummy.new
+  a.sizing = Sizing.fixed(20)
+  b = Dummy.new
+  b.sizing = Sizing.fill
+  c = Dummy.new
+  c.sizing = Sizing.fill
+  col = Box.new(Axis::Column, [a, b, c] of Widget, 10, 5)
+  col.layout(Rect.new(0, 0, 200, 200), rc)
+  expect a.bounds.x == 10 && a.bounds.y == 10 && a.bounds.w == 180 && a.bounds.h == 20, "fixed"
+  expect_eq b.bounds.h, 75_f32, "fill payı: (180-20-10)/2"
+  expect_eq b.bounds.y, 35_f32, "b y"
+  expect_eq c.bounds.y, 115_f32, "sıra + spacing"
+  expect_eq c.bounds.w, 180_f32, "çapraz stretch"
+
+  # Satır, Fit
+  d1 = Dummy.new
+  d2 = Dummy.new
+  d3 = Dummy.new
+  row = Box.new(Axis::Row, [d1, d2, d3] of Widget, 0, 4)
+  p = row.preferred(rc)
+  expect p.w == 40 * 3 + 4 * 2 && p.h == 20, "row fit preferred"
+  row.layout(Rect.new(0, 0, 300, 50), rc)
+  expect_eq d2.bounds.x, 44_f32, "row x"
+  expect_eq d2.bounds.h, 50_f32, "row stretch"
+
+  # Parent yönetimi
+  expect_eq d1.parent, row, "parent set"
+  row.remove(d1)
+  expect d1.parent.nil?, "parent cleared"
+  expect_eq row.children.size, 2, "remove"
+  row.insert(0, d1)
+  expect_eq row.children[0], d1, "insert"
+  row.needs_frame = false
+  row.add(Dummy.new)
+  expect row.needs_frame, "add invalidates"
+  row.clear
+  expect_eq row.children.size, 0, "clear"
+
+  # Sıfır rect
+  z = Box.new(Axis::Column, [Dummy.new, Dummy.new] of Widget, 10, 5)
+  zf = Dummy.new
+  zf.sizing = Sizing.fill
+  z.add(zf)
+  z.layout(Rect.new(0, 0, 0, 0), rc)
+  z.children.each { |w| expect w.bounds.w >= 0 && w.bounds.h >= 0, "negatif boyut yok" }
+  puts "layout ok"
+  0
+end
+
+exit main
