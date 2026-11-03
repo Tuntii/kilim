@@ -1,87 +1,97 @@
-# Task 1 spike'ı: SDL3 linklenir mi, C -> iyi callback'i (SDL_AddEventWatch)
-# çalışır mı, ekran görüntüsü alınabilir mi? Başarıda `smoke ok` yazar, 0 ile
-# çıkar; aksi hâlde nedenini yazar, 1 ile çıkar. smoke.bmp çalışma dizinine
-# yazılır.
+# SDL backend'inin uçtan uca denemesi: bir Label ve Button'lı pencere açılır,
+# Tab + Space inject edilir, canlı resize yolu (event watch) denenir,
+# smoke.bmp kaydedilir ve run döngüsü QUIT ile biter. Başarıda `smoke ok`
+# yazar, 0 ile çıkar; aksi hâlde nedenini yazar, 1 ile çıkar.
 
 module examples/smoke
 
-import std/box::{Box}
+import std/float
 import kilim/sdl::*
+import kilim/event::*
+import kilim/widget::{Widget}
+import kilim/box::*
+import kilim/label::{Label}
+import kilim/button::{Button}
+import kilim/window::{Window}
 
-# Watch callback'inin saydığı olaylar. Sınıf, çünkü Box'tan çıkan referans
-# aynı nesneyi göstermeli; struct olsaydı kopyası artardı.
+PAD = 12_f32
+
 class Counter
-  property count = 0
-end
-
-def c_string(ptr : UInt8*) : String
-  len = 0
-  while ptr[len] != 0_u8
-    len += 1
-  end
-  String.new(len) { |t| t.copy_from(ptr, len) }
+  property n = 0
 end
 
 def fail(why : String) : NoReturn
-  puts "smoke FAIL: #{why}: #{c_string(LibSDL3.SDL_GetError)}"
+  puts "smoke FAIL: #{why}"
   exit 1
 end
 
+def push(e : LibSDL3::Event) : Nil
+  fail("SDL_PushEvent") unless LibSDL3.SDL_PushEvent(pointerof(e))
+end
+
+def push_button(type : UInt32, x : Float32, y : Float32) : Nil
+  e = LibSDL3::Event.new
+  b = LibSDL3::MouseButtonEvent.new
+  b.type = type
+  b.button = LibSDL3::BUTTON_LEFT
+  b.down = type == LibSDL3::EVENT_MOUSE_BUTTON_DOWN
+  b.x = x
+  b.y = y
+  pointerof(e).as(LibSDL3::MouseButtonEvent*).value = b
+  push(e)
+end
+
+def push_key(key : UInt32) : Nil
+  e = LibSDL3::Event.new
+  k = LibSDL3::KeyboardEvent.new
+  k.type = LibSDL3::EVENT_KEY_DOWN
+  k.key = key
+  k.down = true
+  pointerof(e).as(LibSDL3::KeyboardEvent*).value = k
+  push(e)
+end
+
 def main : Int32
-  fail("SDL_Init") unless LibSDL3.SDL_Init(LibSDL3::INIT_VIDEO)
-  fail("TTF_Init") unless LibTTF.TTF_Init
+  n = Counter.new
+  button = Button.new("Tamam", -> { n.n += 1; nil })
+  root = Box.new(Axis::Column, [Label.new("Merhaba şöğüt"), button] of Widget, padding: PAD, spacing: 8_f32)
+  win = Window.new("smoke", 320, 200, root)
+  win.step
 
-  # Watch pencereden önce kaydedilir: offscreen sürücüsü pencere olaylarını
-  # SDL_CreateWindow içinde, eşzamanlı olarak kuyruğa koyar; sonra kaydedilen
-  # bir watch hiçbir olay görmez.
-  counter = Counter.new
-  # Kutu bu değişkende yaşar: SDL'in elindeki tek kopya C tarafında, GC onu
-  # göremez. RemoveEventWatch'tan sonra tekrar kullanılarak canlı tutulur.
-  userdata = Box.box(counter)
-  # Closure değil: hiçbir yerel değişkeni yakalamaz, durumu userdata taşır.
-  watch = ->(data : Void*, event : LibSDL3::Event*) do
-    Box(Counter).unbox(data).count += 1
-    true
-  end
-  fail("SDL_AddEventWatch") unless LibSDL3.SDL_AddEventWatch(watch, userdata)
+  win.inject KeyDown.new(Key::Tab, Mods.new)
+  fail("Tab butona odaklanmadı") unless button.focused
+  win.inject KeyDown.new(Key::Space, Mods.new)
+  fail("Space sonrası sayaç #{n.n}, beklenen 1") unless n.n == 1
+  win.step
 
-  window = LibSDL3.SDL_CreateWindow("kilim smoke", 320, 200, 0_u64)
-  fail("SDL_CreateWindow") if window.address == 0
-  renderer = LibSDL3.SDL_CreateRenderer(window, Pointer(UInt8).new(0_u64))
-  fail("SDL_CreateRenderer") if renderer.address == 0
+  # SDL olay çevirisi: kuyruğa konan gerçek SDL olayları da butona ulaşmalı.
+  cx = button.bounds.x + button.bounds.w / 2
+  cy = button.bounds.y + button.bounds.h / 2
+  push_button(LibSDL3::EVENT_MOUSE_BUTTON_DOWN, cx, cy)
+  push_button(LibSDL3::EVENT_MOUSE_BUTTON_UP, cx, cy)
+  push_key(LibSDL3::KEY_RETURN)
+  win.step
+  fail("SDL tıklama + Enter sonrası sayaç #{n.n}, beklenen 3") unless n.n == 3
 
-  event = LibSDL3::Event.new
-  10.times do
-    while LibSDL3.SDL_PollEvent(pointerof(event))
-    end
-  end
+  # Canlı resize yolu: SetWindowSize'ın ürettiği WINDOW_RESIZED, döngü hiç
+  # çalışmadan watch'ta layout + çizim yaptırmalı. Pencere yöneticisi hangi
+  # boyutu verdiyse buton genişliği ona uymalı.
+  LibSDL3.SDL_SetWindowSize(win.handle, 400, 240)
+  LibSDL3.SDL_SyncWindow(win.handle)
+  w = h = 0
+  LibSDL3.SDL_GetWindowSize(win.handle, pointerof(w), pointerof(h))
+  expected = w - 2 * PAD
+  fail("resize sonrası buton genişliği #{button.bounds.w}, beklenen #{expected} (pencere #{w}x#{h})") unless button.bounds.w == expected
+  puts "resize: #{w}x#{h}, density #{LibSDL3.SDL_GetWindowPixelDensity(win.handle)}"
 
-  LibSDL3.SDL_SetRenderDrawColor(renderer, 30_u8, 120_u8, 200_u8, 255_u8)
-  LibSDL3.SDL_RenderClear(renderer)
-  surface = LibSDL3.SDL_RenderReadPixels(renderer, Pointer(LibSDL3::Rect).new(0_u64))
-  fail("SDL_RenderReadPixels") if surface.address == 0
-  r = g = b = a = 0_u8
-  fail("SDL_ReadSurfacePixel") unless LibSDL3.SDL_ReadSurfacePixel(surface, 10, 10, pointerof(r), pointerof(g), pointerof(b), pointerof(a))
-  fail("SDL_SaveBMP") unless LibSDL3.SDL_SaveBMP(surface, "smoke.bmp")
-  LibSDL3.SDL_DestroySurface(surface)
-  LibSDL3.SDL_RenderPresent(renderer)
+  win.step
+  win.screenshot("smoke.bmp")
 
-  LibSDL3.SDL_RemoveEventWatch(watch, userdata)
-  calls = Box(Counter).unbox(userdata).count
-
-  LibSDL3.SDL_DestroyWindow(window)
-  LibTTF.TTF_Quit
-  LibSDL3.SDL_Quit
-
-  if calls == 0
-    puts "smoke FAIL: event watch was never called"
-    return 1
-  end
-  unless r == 30 && g == 120 && b == 200
-    puts "smoke FAIL: pixel (10,10) is (#{r}, #{g}, #{b}), expected (30, 120, 200)"
-    return 1
-  end
-  puts "watch calls: #{calls}"
+  # run'ın bekleyen döngüsü QUIT ile bitmeli (ve pencereyi kapatmalı).
+  quit = LibSDL3::Event.new
+  quit.type = LibSDL3::EVENT_QUIT
+  LibSDL3.SDL_PushEvent(pointerof(quit))
+  win.run
   puts "smoke ok"
   0
 end

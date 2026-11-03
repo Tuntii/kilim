@@ -1,6 +1,7 @@
-# SDL3 ve SDL3_ttf bağlamaları. Yalnızca kilim'in çağırdığı fun'lar burada;
-# sonraki görevler eksik olanları ekler. İmzalar SDL3 başlıklarındaki C
-# tiplerinin karşılığıdır: `bool` -> Bool, `Uint32` -> UInt32, `int` -> Int32.
+# SDL3 ve SDL3_ttf bağlamaları. Yalnızca kilim'in çağırdığı fun'lar burada.
+# İmzalar SDL3 başlıklarındaki C tiplerinin karşılığıdır: `bool` -> Bool,
+# `Uint32` -> UInt32, `int` -> Int32, `size_t` -> UInt64 (yalnızca 64 bit
+# hedefler var).
 
 module kilim/sdl
 
@@ -11,6 +12,47 @@ module kilim/sdl
 lib ::LibSDL3
   INIT_VIDEO = 0x00000020_u32
 
+  WINDOW_RESIZABLE          = 0x0000000000000020_u64
+  WINDOW_HIGH_PIXEL_DENSITY = 0x0000000000002000_u64
+
+  BLENDMODE_BLEND = 0x00000001_u32
+
+  EVENT_QUIT                         = 0x100_u32
+  EVENT_WINDOW_EXPOSED               = 0x204_u32
+  EVENT_WINDOW_RESIZED               = 0x206_u32
+  EVENT_WINDOW_PIXEL_SIZE_CHANGED    = 0x207_u32
+  EVENT_WINDOW_CLOSE_REQUESTED       = 0x210_u32
+  EVENT_WINDOW_DISPLAY_SCALE_CHANGED = 0x214_u32
+  EVENT_KEY_DOWN                     = 0x300_u32
+  EVENT_TEXT_INPUT                   = 0x303_u32
+  EVENT_MOUSE_MOTION                 = 0x400_u32
+  EVENT_MOUSE_BUTTON_DOWN            = 0x401_u32
+  EVENT_MOUSE_BUTTON_UP              = 0x402_u32
+  EVENT_MOUSE_WHEEL                  = 0x403_u32
+
+  BUTTON_LEFT   = 1_u8
+  BUTTON_MIDDLE = 2_u8
+  BUTTON_RIGHT  = 3_u8
+
+  KMOD_SHIFT = 0x0003_u16
+  KMOD_CTRL  = 0x00C0_u16
+  KMOD_ALT   = 0x0300_u16
+  KMOD_GUI   = 0x0C00_u16
+
+  KEY_RETURN    = 0x0000000d_u32
+  KEY_ESCAPE    = 0x0000001b_u32
+  KEY_BACKSPACE = 0x00000008_u32
+  KEY_TAB       = 0x00000009_u32
+  KEY_SPACE     = 0x00000020_u32
+  KEY_C         = 0x00000063_u32
+  KEY_V         = 0x00000076_u32
+  KEY_DELETE    = 0x0000007f_u32
+  KEY_HOME      = 0x4000004a_u32
+  KEY_END       = 0x4000004d_u32
+  KEY_RIGHT     = 0x4000004f_u32
+  KEY_LEFT      = 0x40000050_u32
+  KEY_KP_ENTER  = 0x40000058_u32
+
   struct Rect
     x : Int32
     y : Int32
@@ -18,8 +60,22 @@ lib ::LibSDL3
     h : Int32
   end
 
+  struct FRect
+    x : Float32
+    y : Float32
+    w : Float32
+    h : Float32
+  end
+
+  struct Color
+    r : UInt8
+    g : UInt8
+    b : UInt8
+    a : UInt8
+  end
+
   # SDL_Event 128 baytlık bir union'dır. Yalnızca `type` alanı burada; alt
-  # yapılar (SDL_KeyboardEvent vb.) bu struct'ın pointer'ı cast edilerek okunur.
+  # yapılar (aşağıdaki *Event'ler) bu struct'ın pointer'ı cast edilerek okunur.
   # Dolgu UInt64 cinsinden, çünkü union'da 64 bitlik zaman damgaları var ve
   # struct 8 bayta hizalanmalı: 4 (type) + 4 + 15 * 8 = 128.
   struct Event
@@ -28,29 +84,149 @@ lib ::LibSDL3
     padding : StaticArray(UInt64, 15)
   end
 
+  struct WindowEvent
+    type : UInt32
+    reserved : UInt32
+    timestamp : UInt64
+    window_id : UInt32
+    data1 : Int32
+    data2 : Int32
+  end
+
+  struct KeyboardEvent
+    type : UInt32
+    reserved : UInt32
+    timestamp : UInt64
+    window_id : UInt32
+    which : UInt32
+    scancode : UInt32
+    key : UInt32
+    mod : UInt16
+    raw : UInt16
+    down : Bool
+    repeat : Bool
+  end
+
+  struct TextInputEvent
+    type : UInt32
+    reserved : UInt32
+    timestamp : UInt64
+    window_id : UInt32
+    text : UInt8*
+  end
+
+  struct MouseMotionEvent
+    type : UInt32
+    reserved : UInt32
+    timestamp : UInt64
+    window_id : UInt32
+    which : UInt32
+    state : UInt32
+    x : Float32
+    y : Float32
+    xrel : Float32
+    yrel : Float32
+  end
+
+  struct MouseButtonEvent
+    type : UInt32
+    reserved : UInt32
+    timestamp : UInt64
+    window_id : UInt32
+    which : UInt32
+    button : UInt8
+    down : Bool
+    clicks : UInt8
+    padding : UInt8
+    x : Float32
+    y : Float32
+  end
+
+  struct MouseWheelEvent
+    type : UInt32
+    reserved : UInt32
+    timestamp : UInt64
+    window_id : UInt32
+    which : UInt32
+    x : Float32
+    y : Float32
+    direction : UInt32
+    mouse_x : Float32
+    mouse_y : Float32
+    integer_x : Int32
+    integer_y : Int32
+  end
+
   # `typedef bool (*SDL_EventFilter)(void *userdata, SDL_Event *event)`
   alias EventFilter = (Void*, Event*) -> Bool
 
   fun SDL_Init(flags : UInt32) : Bool
   fun SDL_Quit : Void
   fun SDL_GetError : UInt8*
+  fun SDL_free(mem : Void*) : Void
   fun SDL_CreateWindow(title : UInt8*, w : Int32, h : Int32, flags : UInt64) : Void*
   fun SDL_DestroyWindow(window : Void*) : Void
+  fun SDL_GetWindowSize(window : Void*, w : Int32*, h : Int32*) : Bool
+  fun SDL_SetWindowSize(window : Void*, w : Int32, h : Int32) : Bool
+  fun SDL_SyncWindow(window : Void*) : Bool
+  fun SDL_GetWindowPixelDensity(window : Void*) : Float32
   fun SDL_CreateRenderer(window : Void*, name : UInt8*) : Void*
+  fun SDL_DestroyRenderer(renderer : Void*) : Void
   fun SDL_SetRenderDrawColor(renderer : Void*, r : UInt8, g : UInt8, b : UInt8, a : UInt8) : Bool
+  fun SDL_SetRenderDrawBlendMode(renderer : Void*, mode : UInt32) : Bool
+  fun SDL_SetRenderClipRect(renderer : Void*, rect : Rect*) : Bool
   fun SDL_RenderClear(renderer : Void*) : Bool
+  fun SDL_RenderFillRect(renderer : Void*, rect : FRect*) : Bool
+  fun SDL_RenderRect(renderer : Void*, rect : FRect*) : Bool
+  fun SDL_RenderLine(renderer : Void*, x1 : Float32, y1 : Float32, x2 : Float32, y2 : Float32) : Bool
+  fun SDL_RenderTexture(renderer : Void*, texture : Void*, src : FRect*, dst : FRect*) : Bool
   fun SDL_RenderPresent(renderer : Void*) : Bool
   fun SDL_RenderReadPixels(renderer : Void*, rect : Rect*) : Void*
+  fun SDL_CreateTextureFromSurface(renderer : Void*, surface : Void*) : Void*
+  fun SDL_GetTextureSize(texture : Void*, w : Float32*, h : Float32*) : Bool
+  fun SDL_DestroyTexture(texture : Void*) : Void
   fun SDL_SaveBMP(surface : Void*, file : UInt8*) : Bool
   fun SDL_DestroySurface(surface : Void*) : Void
   fun SDL_ReadSurfacePixel(surface : Void*, x : Int32, y : Int32, r : UInt8*, g : UInt8*, b : UInt8*, a : UInt8*) : Bool
+  fun SDL_IOFromConstMem(mem : Void*, size : UInt64) : Void*
   fun SDL_PollEvent(event : Event*) : Bool
+  fun SDL_WaitEvent(event : Event*) : Bool
+  fun SDL_WaitEventTimeout(event : Event*, timeout_ms : Int32) : Bool
+  fun SDL_PushEvent(event : Event*) : Bool
   fun SDL_AddEventWatch(filter : EventFilter, userdata : Void*) : Bool
   fun SDL_RemoveEventWatch(filter : EventFilter, userdata : Void*) : Void
+  fun SDL_GetModState : UInt16
+  fun SDL_StartTextInput(window : Void*) : Bool
+  fun SDL_StopTextInput(window : Void*) : Bool
+  fun SDL_SetClipboardText(text : UInt8*) : Bool
+  fun SDL_GetClipboardText : UInt8*
 end
 
 @[Link("SDL3_ttf")]
 lib ::LibTTF
   fun TTF_Init : Bool
   fun TTF_Quit : Void
+  fun TTF_OpenFontIO(src : Void*, closeio : Bool, ptsize : Float32) : Void*
+  fun TTF_CloseFont(font : Void*) : Void
+  fun TTF_SetFontSize(font : Void*, ptsize : Float32) : Bool
+  fun TTF_GetFontHeight(font : Void*) : Int32
+  fun TTF_GetStringSize(font : Void*, text : UInt8*, length : UInt64, w : Int32*, h : Int32*) : Bool
+  fun TTF_RenderText_Blended(font : Void*, text : UInt8*, length : UInt64, fg : LibSDL3::Color) : Void*
+end
+
+# NUL ile biten C dizgisini kopyalar (iyi'de `String.new(UInt8*)` yok).
+pub def c_string(ptr : UInt8*) : String
+  len = 0
+  while ptr[len] != 0_u8
+    len += 1
+  end
+  String.new(len) { |t| t.copy_from(ptr, len) }
+end
+
+# shortcut: iyi'de rescue yok ve initialize bir hata birliği döndüremiyor;
+# SDL açılamazsa program biter. Kurtarılabilir açılış gerekirse
+# `Window.open : Window | SdlError` eklenir.
+pub def sdl_fatal(why : String) : NoReturn
+  STDERR.puts "kilim: #{why}: #{c_string(LibSDL3.SDL_GetError)}"
+  exit 1
 end

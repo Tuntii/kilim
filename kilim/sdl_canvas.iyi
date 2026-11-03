@@ -1,0 +1,142 @@
+# Canvas ve Clipboard'un SDL3/SDL3_ttf uygulaması. Çağıranlar mantıksal birim
+# verir; burada `density` ile piksele çevrilir, metin de bu yoğunlukta
+# rasterleştirilir (Retina'da keskin).
+
+module kilim/sdl_canvas
+
+import std/float
+import kilim/sdl::*
+import kilim/geom::{Rect, Size}
+import kilim/canvas::{Canvas, Color}
+import kilim/clipboard::{Clipboard}
+import kilim/theme::*
+
+# Programa gömülü font (Noto Sans Regular, OFL: assets/fonts/OFL.txt).
+FONT_DATA = {{ read_file("#{__DIR__}/../assets/fonts/NotoSans-Regular.ttf") }}
+
+pub class SdlCanvas < Canvas
+  getter density : Float32
+
+  def initialize(@renderer : Void*, @density : Float32)
+    io = LibSDL3.SDL_IOFromConstMem(FONT_DATA.to_unsafe.as(Void*), FONT_DATA.bytesize.to_u64)
+    sdl_fatal("SDL_IOFromConstMem") if io.address == 0
+    @font = LibTTF.TTF_OpenFontIO(io, true, FONT_SIZE * @density)
+    sdl_fatal("TTF_OpenFontIO") if @font.address == 0
+    @clips = [] of Rect
+    LibSDL3.SDL_SetRenderDrawBlendMode(@renderer, LibSDL3::BLENDMODE_BLEND)
+  end
+
+  # Pencere başka yoğunlukta bir ekrana taşınınca.
+  pub def set_density(d : Float32) : Nil
+    return if d == @density
+    @density = d
+    LibTTF.TTF_SetFontSize(@font, FONT_SIZE * d)
+  end
+
+  pub def fill_rect(r : Rect, c : Color) : Nil
+    color(c)
+    fr = frect(r)
+    LibSDL3.SDL_RenderFillRect(@renderer, pointerof(fr))
+  end
+
+  pub def stroke_rect(r : Rect, c : Color) : Nil
+    color(c)
+    fr = frect(r)
+    LibSDL3.SDL_RenderRect(@renderer, pointerof(fr))
+  end
+
+  pub def line(x1 : Float32, y1 : Float32, x2 : Float32, y2 : Float32, c : Color) : Nil
+    color(c)
+    d = @density
+    LibSDL3.SDL_RenderLine(@renderer, x1 * d, y1 * d, x2 * d, y2 * d)
+  end
+
+  # shortcut: her frame metin dokusu yeniden üretilir, büyük listelerde yavaşlarsa (metin, renk) önbelleğine geçilir
+  pub def text(x : Float32, y : Float32, s : String, c : Color) : Nil
+    return if s.empty?
+    surface = LibTTF.TTF_RenderText_Blended(@font, s.to_unsafe, s.bytesize.to_u64, sdl_color(c))
+    return if surface.address == 0
+    texture = LibSDL3.SDL_CreateTextureFromSurface(@renderer, surface)
+    LibSDL3.SDL_DestroySurface(surface)
+    return if texture.address == 0
+    w = h = 0_f32
+    LibSDL3.SDL_GetTextureSize(texture, pointerof(w), pointerof(h))
+    # Tam piksele yuvarlanır: kesirli konumda doku süzülür ve metin bulanıklaşır.
+    dst = LibSDL3::FRect.new(x: (x * @density).round, y: (y * @density).round, w: w, h: h)
+    LibSDL3.SDL_RenderTexture(@renderer, texture, Pointer(LibSDL3::FRect).new(0_u64), pointerof(dst))
+    LibSDL3.SDL_DestroyTexture(texture)
+  end
+
+  pub def measure(s : String) : Size
+    w = h = 0
+    LibTTF.TTF_GetStringSize(@font, s.to_unsafe, s.bytesize.to_u64, pointerof(w), pointerof(h))
+    Size.new(w / @density, h / @density)
+  end
+
+  pub def line_height : Float32
+    LibTTF.TTF_GetFontHeight(@font) / @density
+  end
+
+  pub def push_clip(r : Rect) : Nil
+    @clips << (@clips.empty? ? r : @clips.last.intersect(r))
+    apply_clip
+  end
+
+  pub def pop_clip : Nil
+    @clips.pop unless @clips.empty?
+    apply_clip
+  end
+
+  pub def close : Nil
+    return if @font.address == 0
+    LibTTF.TTF_CloseFont(@font)
+    @font = Pointer(Void).new(0_u64)
+  end
+
+  def apply_clip : Nil
+    if @clips.empty?
+      LibSDL3.SDL_SetRenderClipRect(@renderer, Pointer(LibSDL3::Rect).new(0_u64))
+      return
+    end
+    r = @clips.last
+    d = @density
+    # Dışa yuvarlanır: kenardaki yarım piksel kırpılmasın.
+    x0 = (r.x * d).floor
+    y0 = (r.y * d).floor
+    x1 = ((r.x + r.w) * d).ceil
+    y1 = ((r.y + r.h) * d).ceil
+    pr = LibSDL3::Rect.new(x: x0.to_i, y: y0.to_i, w: (x1 - x0).to_i, h: (y1 - y0).to_i)
+    LibSDL3.SDL_SetRenderClipRect(@renderer, pointerof(pr))
+  end
+
+  def frect(r : Rect) : LibSDL3::FRect
+    d = @density
+    LibSDL3::FRect.new(x: r.x * d, y: r.y * d, w: r.w * d, h: r.h * d)
+  end
+
+  def color(c : Color) : Nil
+    LibSDL3.SDL_SetRenderDrawColor(@renderer, c.r, c.g, c.b, c.a)
+  end
+
+  def sdl_color(c : Color) : LibSDL3::Color
+    LibSDL3::Color.new(r: c.r, g: c.g, b: c.b, a: c.a)
+  end
+
+  @renderer : Void*
+  @font : Void*
+  @clips : Array(Rect)
+end
+
+pub class SdlClipboard < Clipboard
+  pub def get : String
+    ptr = LibSDL3.SDL_GetClipboardText
+    return "" if ptr.address == 0
+    s = c_string(ptr)
+    LibSDL3.SDL_free(ptr.as(Void*))
+    s
+  end
+
+  pub def set(s : String) : Nil
+    LibSDL3.SDL_SetClipboardText(s)
+  end
+end

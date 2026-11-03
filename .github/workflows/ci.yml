@@ -75,14 +75,15 @@ jobs:
           # Homebrew'un lib dizini cc'nin varsayılan arama yolunda değil.
           echo "IYI_LIBRARY_PATH=$(brew --prefix)/lib" >> "$GITHUB_ENV"
 
-      # --- smoke: önce varsayılan video sürücüsü; pencere açılamazsa offscreen ---
+      # --- smoke (Window + SdlCanvas, smoke.bmp yazar): önce varsayılan video
+      # sürücüsü; pencere açılamazsa offscreen ---
       - name: Smoke
         shell: bash
         run: |
           iyi version
           if ${{ matrix.wrap }} iyi run examples/smoke.iyi 2>&1 | tee smoke.log; then
             echo "video driver: default${{ matrix.wrap && ' (xvfb)' || '' }}"
-          elif grep -qE 'smoke FAIL: SDL_(Init|CreateWindow|CreateRenderer)' smoke.log; then
+          elif grep -qE 'kilim: SDL_(Init|CreateWindow|CreateRenderer)' smoke.log; then
             echo "window could not be opened, retrying with SDL_VIDEO_DRIVER=offscreen"
             SDL_VIDEO_DRIVER=offscreen iyi run examples/smoke.iyi
             echo "video driver: offscreen"
@@ -95,5 +96,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: smoke-${{ matrix.os }}
-          path: '*.bmp'
+          path: smoke.bmp
           if-no-files-found: warn
