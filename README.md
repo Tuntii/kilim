@@ -1,37 +1,120 @@
-# kilim
+<p align="center">
+  <img src="assets/logo.svg" alt="kilim logo: a small woven kilim rug" width="120">
+</p>
 
-A retained-mode GUI library for [iyi](https://iyi.dev), written from scratch on
-top of SDL3. kilim draws its own widgets instead of using the operating
-system's controls, so an app looks the same everywhere. It runs on Windows,
-Linux and macOS.
+<h1 align="center">kilim</h1>
+
+<p align="center">
+  A retained-mode GUI library for <a href="https://iyi.dev">iyi</a>, woven from scratch on SDL3.
+</p>
+
+<p align="center">
+  <a href="https://github.com/Tuntii/kilim/actions/workflows/ci.yml"><img src="https://github.com/Tuntii/kilim/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Tuntii/kilim" alt="License: Apache-2.0"></a>
+  <img src="https://img.shields.io/badge/iyi-0.20.0-blue" alt="iyi 0.20.0">
+  <img src="https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey" alt="Platforms: Windows, Linux, macOS">
+</p>
+
+<p align="center">
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#widgets">Widgets</a> ·
+  <a href="#installation">Installation</a> ·
+  <a href="ROADMAP.md">Roadmap</a> ·
+  <a href="#contributing">Contributing</a>
+</p>
 
 <p align="center">
   <img src="assets/readme/demo.gif" alt="The kilim to-do example: typing tasks, ticking one off, scrolling the list and deleting a row" width="480">
 </p>
 
-```crystal
-module main
+## Why kilim
 
-import github.com/tuntii/kilim
-import github.com/tuntii/kilim/kilim/widget::{Widget}
+- **Draws its own widgets.** kilim does not wrap the operating system's
+  controls, so an app looks the same on Windows, Linux and macOS.
+- **Small, declarative API.** You build a tree of widgets once and change
+  them directly (`label.text = "..."`, `list.add(row)`), in the spirit of V's
+  `ui`.
+- **Plain iyi.** No `--crystal` and no Crystal standard library. The only
+  native dependencies are SDL3 and SDL3_ttf.
+- **Unicode text that works.** Turkish and other non-ASCII text displays and
+  edits correctly, with an embedded Noto Sans font.
+- **Idle means idle.** kilim redraws only when something changes, and the
+  layout follows live while you drag-resize the window.
+- **Tested on three platforms.** Every commit runs the tests, a smoke test
+  and a self-driving to-do app on Windows, Linux and macOS.
 
-def main : Int32
-  count = Kilim.label("0")
-  n = 0
-  inc = Kilim.button("Increment", -> { n += 1; count.text = n.to_s; nil })
-  Kilim.window("Counter", 240, 120, Kilim.column([count, inc] of Widget, padding: 12, spacing: 8)).run
-  0
-end
+## Quick start
 
-exit main
-```
+1. Install [iyi 0.20.0](#iyi-0200) and [SDL3 + SDL3_ttf](#sdl3-and-sdl3_ttf).
+2. Add kilim to your `iyi.mod`:
 
-A bigger example is [`examples/todo.iyi`](examples/todo.iyi), a to-do list
-with a textbox, buttons, checkboxes, scrolling and Unicode (Turkish) text.
+   ```
+   module example.com/app
+
+   require github.com/tuntii/kilim v0.1.1
+   ```
+
+   or run `iyi get github.com/tuntii/kilim@v0.1.1`.
+3. Write `main.iyi`:
+
+   ```crystal
+   import github.com/tuntii/kilim
+   import github.com/tuntii/kilim/kilim/widget::{Widget}
+
+   def main : Int32
+     count = Kilim.label("0")
+     n = 0
+     inc = Kilim.button("Increment", -> { n += 1; count.text = n.to_s; nil })
+     Kilim.window("Counter", 240, 120, Kilim.column([count, inc] of Widget, padding: 12, spacing: 8)).run
+     0
+   end
+
+   exit main
+   ```
+4. Run it with `iyi run main.iyi`.
+
+For a bigger example, see [`examples/todo.iyi`](examples/todo.iyi): a to-do
+list with a textbox, buttons, checkboxes, scrolling and Turkish text.
 
 <p align="center">
   <img src="assets/readme/todo.png" alt="The to-do example with a ticked task, Turkish text and a scrollbar" width="480">
 </p>
+
+## Widgets
+
+`import github.com/tuntii/kilim` gives you these builders under `Kilim`:
+
+| Builder | What it is |
+|---|---|
+| `window(title, width, height, child)` | The app window; `.run` starts the event loop. |
+| `column(children, padding:, spacing:, sizing:)` | Lays its children out top to bottom. |
+| `row(children, padding:, spacing:, sizing:)` | Lays its children out left to right. |
+| `label(text)` | Text; set `label.text = ...` to change it. |
+| `button(text, on_click:, sizing:)` | A clickable button. Space and Enter work when it has focus. |
+| `checkbox(text, checked:, on_change:, sizing:)` | A checkbox with a label. Checked items are drawn struck through. |
+| `textbox(placeholder, on_change:, on_submit:, sizing:)` | A single-line text field with copy and paste. |
+| `scroll(child, sizing:)` | A vertically scrolling viewport with a scrollbar. |
+
+**Sizing.** Each child of a `row` or `column` sizes itself along that box's
+direction:
+
+- `Kilim.fit` (default) takes the size of its content.
+- `Kilim.fixed(v)` takes `v` logical pixels.
+- `Kilim.fill(weight)` shares the space that is left, in proportion to its
+  weight.
+
+Across the other direction, children stretch. A `textbox` with `fill` belongs
+inside a `row`; inside a `column` it would grow vertically.
+
+**Types.** The widget types live in submodules (`kilim/label`,
+`kilim/button`, `kilim/box`, …). With only the package import, write them
+with their qualified names (`Kilim::Widget::Widget`). For short names, also
+import `github.com/tuntii/kilim/kilim/<name>::{Type}`, as the quick start does
+for `Widget`.
+
+**Keyboard.** Tab and Shift+Tab move focus. In a textbox, use the arrow keys,
+Home/End, Backspace/Delete and Enter, plus Ctrl/Cmd+V to paste. Ctrl/Cmd+C
+copies the whole text, because there is no selection yet.
 
 ## Installation
 
@@ -56,22 +139,16 @@ curl -fsSL https://raw.githubusercontent.com/iyilang/iyi/v0.20.0/install.sh | IY
 
 The versions are pinned in `scripts/sdl-versions.txt`.
 
-- **Windows:** `. .\scripts\fetch-sdl.ps1` (the leading dot matters). It
-  downloads the VC development packages into `vendor/windows/`, verifies their
-  SHA256, and sets `IYI_LIBRARY_PATH` (the `.lib` directories) and `PATH` (the
-  DLLs) for the current session. When you ship a built exe, put `SDL3.dll` and
-  `SDL3_ttf.dll` next to it.
-- **Linux:** `bash scripts/build-sdl-linux.sh` builds from source and installs
-  to `/usr/local` (needs cmake, ninja and the X11 development packages; see
-  `.github/workflows/ci.yml` for the list).
-- **macOS:** `brew install sdl3 sdl3_ttf` and
-  `export IYI_LIBRARY_PATH=$(brew --prefix)/lib`.
+| Platform | Setup |
+|---|---|
+| Windows | `. .\scripts\fetch-sdl.ps1` (the leading dot matters). It downloads the VC development packages into `vendor/windows/`, checks their SHA256, and sets `IYI_LIBRARY_PATH` and `PATH` for the current session. Ship `SDL3.dll` and `SDL3_ttf.dll` next to your exe. |
+| Linux | `bash scripts/build-sdl-linux.sh` builds from source and installs to `/usr/local` (needs cmake, ninja and the X11 development packages; see `.github/workflows/ci.yml`). |
+| macOS | `brew install sdl3 sdl3_ttf` and `export IYI_LIBRARY_PATH=$(brew --prefix)/lib`. |
 
-For `@[Link("SDL3")]`, iyi looks for `SDL3.lib` (`libSDL3` on Unix) in the
-directories listed in `IYI_LIBRARY_PATH`. At run time the DLLs must be on
-`PATH` (Windows).
+iyi looks for `SDL3.lib` (`libSDL3` on Unix) in the directories listed in
+`IYI_LIBRARY_PATH`. On Windows the DLLs must also be on `PATH` at run time.
 
-### Running
+### Working on kilim itself
 
 ```sh
 iyi test                                            # core tests, no SDL needed
@@ -79,59 +156,38 @@ iyi run examples/todo.iyi                           # the to-do example
 KILIM_SELFTEST=todo.bmp iyi run examples/todo.iyi   # hands-off acceptance test, writes todo.bmp
 ```
 
-In CI (`SDL_RENDER_DRIVER=software`), if a window cannot be opened the run is
-retried with `SDL_VIDEO_DRIVER=offscreen`.
+To use a local clone from another project, add
+`replace github.com/tuntii/kilim => ../kilim` to that project's `iyi.mod`. The
+module path is lower-case because iyi does not allow upper-case paths.
 
-## Using kilim in your project
+In CI (`SDL_RENDER_DRIVER=software`), a run that cannot open a window is
+retried with `SDL_VIDEO_DRIVER=offscreen`. Screenshots are uploaded as BMP
+artifacts.
 
-`iyi.mod`:
+## Status
 
-```
-module example.com/app
+kilim is at **v0.1**: small, tested, and young. Not there yet:
 
-require github.com/tuntii/kilim v0.1.1
-```
-
-or `iyi get github.com/tuntii/kilim@v0.1.1`. To work against a local clone,
-add `replace github.com/tuntii/kilim => ../kilim`. The module path is
-lower-case because iyi does not allow upper-case paths.
-
-In code:
-
-```crystal
-import github.com/tuntii/kilim                           # Kilim.window, Kilim.column, ...
-import github.com/tuntii/kilim/kilim/widget::{Widget}    # optional: short type name
-```
-
-`import github.com/tuntii/kilim` gives you the builder functions under
-`Kilim`: `window`, `column`, `row`, `label`, `button`, `checkbox`, `textbox`,
-`scroll`, and the sizing shortcuts `fit`, `fixed(v)` and `fill(weight)`. The
-widget types live in their own submodules (`kilim/label`, `kilim/button`,
-`kilim/checkbox`, `kilim/textbox`, `kilim/scroll`, `kilim/box`, `kilim/event`,
-`kilim/window`). The single package import is enough if you write types with
-their qualified names (`Kilim::Widget::Widget`, `Kilim::Box::Box`). For a
-short name (`Widget`), also import `github.com/tuntii/kilim/kilim/<name>::{Type}`.
-Child arrays are written `[a, b] of Kilim::Widget::Widget` (or `of Widget`).
-
-Note: put a Textbox with `fill` sizing inside a `row`. Directly inside a
-`column`, its sizing applies vertically.
-
-This setup has been tried with a real consumer project (iyi 0.20.0, Windows).
-
-## Limits of the first release
-
-Out of scope: menu bar, multiple windows (one window per process), image
-widget, accessibility (screen readers), HiDPI fine-tuning, a theme system
-(light theme only), animation, drag and drop. Also missing: IME, multi-line
-text, text selection and copying a selection (Ctrl/Cmd+V pastes, and
-Ctrl/Cmd+C copies the whole text), mobile and web, persistence.
+- menu bar and multiple windows (one window per process);
+- image widget, theme system (light theme only), animation, drag and drop;
+- text selection, IME and multi-line text;
+- accessibility (screen readers);
+- mobile and web.
 
 Every change redraws the whole window, and text is rasterised again on each
-draw (no cache). Borders are 1 physical pixel thin on HiDPI screens.
+draw. Making that fast, and adding a GPU backend, comes first in the
+[roadmap](ROADMAP.md). Progress is tracked on the
+[project board](https://github.com/users/Tuntii/projects/4).
 
-What comes next is in [ROADMAP.md](ROADMAP.md).
+## Contributing
 
-## Manual checklist
+Issues labelled
+[good first issue](https://github.com/Tuntii/kilim/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+are a good place to start, for example Linux arm64 and Intel macOS support in
+CI.
+
+<details>
+<summary>Manual checklist (things CI cannot see)</summary>
 
 CI runs without a visible display, so check these by hand on a real screen:
 
@@ -146,15 +202,12 @@ CI runs without a visible display, so check these by hand on a real screen:
 - On AltGr layouts (Polish AltGr+C, Hungarian AltGr+V), the character is typed
   and copy/paste is not triggered.
 
-CI screenshots are uploaded as BMP files.
-
-## Fonts
-
-The embedded font is [Noto Sans](https://github.com/notofonts/latin-greek-cyrillic)
-Regular (v2.015), under the SIL Open Font License 1.1; the licence text is
-`assets/fonts/OFL.txt`. The font is embedded in every built program (~620 KB).
+</details>
 
 ## License
 
-kilim is licensed under the [Apache License 2.0](LICENSE). The embedded font
-keeps its own licence (see above).
+kilim is licensed under the [Apache License 2.0](LICENSE).
+
+The embedded font is [Noto Sans](https://github.com/notofonts/latin-greek-cyrillic)
+Regular (v2.015), under the SIL Open Font License 1.1 (`assets/fonts/OFL.txt`).
+It is embedded in every built program (~620 KB).
