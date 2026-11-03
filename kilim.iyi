@@ -1,19 +1,22 @@
 # kilim'in kullanıcı API'si: pencere, widget kurucuları ve boyut kısayolları.
 # Tipler (Widget, Label, Button, ...) kendi modüllerinde durur
 # (kilim/widget, kilim/label, ...); bu modülde yalnızca kurucu fonksiyonlar var.
-# shortcut: tipler burada yeniden dışa aktarılmıyor çünkü `kilim/box` gibi alt
-# modüller `Kilim::Box` adını tutuyor, aynı adlı tip için alias açılamıyor.
+# Alt modüller `pub import` ile açılır: yalnızca `import github.com/tuntii/kilim`
+# ile `Kilim::Widget::Widget` gibi nitelikli adlar yazılabilir.
+# shortcut: tipler için `pub alias` yok (iyi, ad modül olduğundan reddediyor);
+# kısa ad için alt modülü ayrıca `::{Tip}` ile içe aktarın.
 
 module kilim
 
-import kilim/widget
-import kilim/box
-import kilim/label
-import kilim/button
-import kilim/checkbox
-import kilim/textbox
-import kilim/scroll
-import kilim/window
+pub import kilim/widget
+pub import kilim/box
+pub import kilim/label
+pub import kilim/button
+pub import kilim/checkbox
+pub import kilim/textbox
+pub import kilim/scroll
+pub import kilim/event
+pub import kilim/window
 
 pub def window(title : String, width : Int32, height : Int32, child : Kilim::Widget::Widget) : Kilim::Window::Window
   Kilim::Window::Window.new(title, width, height, child)

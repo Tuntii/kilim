@@ -78,17 +78,20 @@ ile denenir.
 ```
 module example.com/app
 
-require github.com/tuntii/kilim v0.1.0
+require github.com/tuntii/kilim v0.0.0
+replace github.com/tuntii/kilim => ../GUI
 ```
 
-(Yerel denemede `replace github.com/tuntii/kilim => ../GUI` ekleyin.)
+Henüz yayımlanmış bir sürüm etiketi yok; şimdilik `replace` ile yerel yolu
+gösterin (`../GUI` yerine klonun yolu). v0.1.0 etiketi çıkınca `require` o sürümü
+adlandırır ve `replace` gerekmez.
 Modül yolu küçük harftir: iyi büyük harfe izin vermez.
 
 Kodda:
 
 ```crystal
 import github.com/tuntii/kilim                           # Kilim.window, Kilim.column, ...
-import github.com/tuntii/kilim/kilim/widget::{Widget}    # dizi tipi için
+import github.com/tuntii/kilim/kilim/widget::{Widget}    # isteğe bağlı: kısa ad için
 ```
 
 `import github.com/tuntii/kilim` kurucu fonksiyonları `Kilim` altında verir:
@@ -96,20 +99,37 @@ import github.com/tuntii/kilim/kilim/widget::{Widget}    # dizi tipi için
 ve boyut kısayolları `fit`, `fixed(v)`, `fill(weight)`. Widget tipleri kendi
 alt modüllerinde durur (`kilim/label`, `kilim/button`, `kilim/checkbox`,
 `kilim/textbox`, `kilim/scroll`, `kilim/box`, `kilim/event`, `kilim/window`);
-tip adı gerektiğinde `github.com/tuntii/kilim/kilim/<ad>::{Tip}` ile alın.
-Çocuk dizileri `[a, b] of Widget` biçiminde yazılır.
+yalnızca `import github.com/tuntii/kilim` yeter, tipler nitelikli adla yazılır
+(`Kilim::Widget::Widget`, `Kilim::Box::Box`). Kısa ad (`Widget`) istenirse
+`github.com/tuntii/kilim/kilim/<ad>::{Tip}` ayrıca içe aktarılır.
+Çocuk dizileri `[a, b] of Kilim::Widget::Widget` (veya `of Widget`) biçiminde yazılır.
+
+Not: `fill` boyutlu bir Textbox `row` içine konur; doğrudan `column` içinde
+boyutlandırma dikey olur.
 
 Bu yol gerçek bir tüketici projesiyle denendi (iyi 0.20.0, Windows).
 
 ## İlk sürümün sınırları
 
-Kapsam dışı: erişilebilirlik (ekran okuyucu), IME (Çince/Japonca giriş),
-çok satırlı metin, seçim ve seçili metni kopyalama (yalnızca Ctrl/Cmd+V ile
-yapıştırma ve Ctrl/Cmd+C ile tüm metni kopyalama), sürükle-bırak, temalar
-(yalnızca açık tema), animasyon, birden çok pencere (süreç başına bir pencere),
-mobil ve web, kalıcılık. Çizim her değişiklikte pencerenin tamamını yeniden
+Kapsam dışı: menü çubuğu, birden çok pencere (süreç başına bir pencere), resim
+widget'ı, erişilebilirlik (ekran okuyucu), HiDPI ince ayarı, tema sistemi
+(yalnızca açık tema), animasyon, sürükle-bırak; ayrıca IME, çok satırlı metin,
+seçim ve seçimli kopyalama (yalnızca Ctrl/Cmd+V ile yapıştırma ve Ctrl/Cmd+C ile
+tüm metni kopyalama), mobil ve web, kalıcılık. Çizim her değişiklikte pencerenin tamamını yeniden
 çizer; metin her çizimde yeniden rasterleştirilir (önbellek yok). Borderlar HiDPI'da
 1 fiziksel piksel inceliğindedir.
+
+## Elle kontrol listesi
+
+CI penceresiz çalışır; şunlar gerçek ekranda elle bakılmalıdır:
+
+- Windows'ta %125-150 ekran ölçeklemesinde arayüz fiziksel olarak fazla küçük mü?
+  SDL piksel yoğunluğunu 1 bildirip ölçeği `SDL_GetWindowDisplayScale`'e
+  koyuyor olabilir.
+- AltGr'li düzenlerde (Lehçe AltGr+C, Macarca AltGr+V) kopyala/yapıştır tetiklenmiyor,
+  karakter yazılıyor.
+
+CI ekran görüntüleri BMP'dir (tasarım belgesi PNG demişti).
 
 ## Fontlar ve lisans
 

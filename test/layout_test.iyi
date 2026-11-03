@@ -70,6 +70,13 @@ def main : Int32
   z.add(zf)
   z.layout(Rect.new(0, 0, 0, 0), rc)
   z.children.each { |w| expect w.bounds.w >= 0 && w.bounds.h >= 0, "negatif boyut yok" }
+  # Reparent: A'dan B'ye taşı
+  ba = Box.new(Axis::Row)
+  bb = Box.new(Axis::Row)
+  mv = Dummy.new
+  ba.add(mv)
+  bb.add(mv)
+  expect ba.children.size == 0 && bb.children.size == 1 && mv.parent == bb, "reparent"
   puts "layout ok"
   0
 end

@@ -25,15 +25,24 @@ pub class Box < Widget
   end
 
   pub def add(w : Widget) : Nil
+    detach(w)
     @kids << w
     w.parent = self
     invalidate
   end
 
   pub def insert(i : Int32, w : Widget) : Nil
+    detach(w)
     @kids.insert(i, w)
     w.parent = self
     invalidate
+  end
+
+  # Widget başka bir Box'taysa oradan çıkar: iki çocuk listesinde birden olmasın.
+  def detach(w : Widget) : Nil
+    if p = w.parent
+      p.as(Box).remove(w) if p.is_a?(Box)
+    end
   end
 
   pub def remove(w : Widget) : Nil

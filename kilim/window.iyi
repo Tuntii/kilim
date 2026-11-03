@@ -12,11 +12,16 @@ import kilim/widget::{Widget}
 import kilim/ui::{Ui}
 import kilim/theme::*
 
-# primary: macOS'ta Cmd, diğerlerinde Ctrl.
+# primary: macOS'ta Cmd, diğerlerinde Ctrl. Ctrl+Alt birlikteyse AltGr'dir
+# (Windows'ta böyle gelir; Lehçe AltGr+C = ć, Macarca AltGr+V = @): kısayol değil.
 {% if flag?(:darwin) %}
-  PRIMARY_MOD = LibSDL3::KMOD_GUI
+  def primary_down?(mod : UInt16) : Bool
+    mod & LibSDL3::KMOD_GUI != 0
+  end
 {% else %}
-  PRIMARY_MOD = LibSDL3::KMOD_CTRL
+  def primary_down?(mod : UInt16) : Bool
+    mod & LibSDL3::KMOD_CTRL != 0 && mod & LibSDL3::KMOD_ALT == 0
+  end
 {% end %}
 
 pub class Window
@@ -177,14 +182,12 @@ pub class Window
       @ui.dispatch Wheel.new(wh.mouse_x, wh.mouse_y, wh.y)
     when LibSDL3::EVENT_KEY_DOWN
       k = ev.as(LibSDL3::KeyboardEvent*).value
-      mods = Mods.new(shift: k.mod & LibSDL3::KMOD_SHIFT != 0, primary: k.mod & PRIMARY_MOD != 0)
+      mods = Mods.new(shift: k.mod & LibSDL3::KMOD_SHIFT != 0, primary: primary_down?(k.mod))
       @ui.dispatch KeyDown.new(key(k.key), mods)
     when LibSDL3::EVENT_TEXT_INPUT
       # Bazı platformlar Ctrl/Cmd+C/V için de TEXT_INPUT yollar; o kısayoldur,
-      # metin değil. Alt da basılıysa AltGr'dir (Windows'ta Ctrl+Alt görünür;
-      # Türkçe Q'da @ = AltGr+Q), o metin geçer.
-      mod = LibSDL3.SDL_GetModState
-      return if mod & PRIMARY_MOD != 0 && mod & LibSDL3::KMOD_ALT == 0
+      # metin değil (AltGr ise primary_down? false verir, metin geçer).
+      return if primary_down?(LibSDL3.SDL_GetModState)
       @ui.dispatch TextInput.new(c_string(ev.as(LibSDL3::TextInputEvent*).value.text))
     end
   end
