@@ -38,9 +38,9 @@ tagged release that passes the full CI matrix.
 |---|---|---|---|---|
 | Windows x86-64 | `windows-latest` | native | yes | D3D12, or WARP if the runner has no GPU |
 | Linux x86-64 | `ubuntu-24.04` + Xvfb | native | yes | Vulkan through lavapipe (Mesa software Vulkan) |
-| Linux arm64 | `ubuntu-24.04-arm` + Xvfb | cross-compiled from x86-64, linked on the runner | yes | Vulkan through lavapipe |
-| macOS arm64 | `macos-14` | native | yes | Metal |
-| macOS x86-64 | Intel macOS runner | cross-compiled from arm64, linked on the runner | yes | Metal |
+| Linux arm64 | `ubuntu-24.04-arm` + Xvfb | cross-compiled from x86-64, linked on the runner ([#1](https://github.com/Tuntii/kilim/issues/1)) | yes | Vulkan through lavapipe |
+| macOS arm64 | `macos-15` | native | yes | Metal |
+| macOS x86-64 | `macos-15-intel` | cross-compiled from arm64, linked on the runner ([#2](https://github.com/Tuntii/kilim/issues/2)) | yes | Metal |
 
 Each cell runs `iyi test`, the smoke test, the to-do selftest with a
 screenshot, and the benchmarks.
@@ -50,14 +50,9 @@ and macOS arm64. It can still generate code for `aarch64-linux-gnu` and
 `x86_64-darwin`. So for the other two platforms, CI compiles on a supported
 host and links and runs on the target runner.
 
-Two cells are still unproven:
-
-- The GPU cells may have no GPU on hosted runners. If no software driver
-  works there, those cells move to a self-hosted runner: the Linux VBOT
-  server, and a real Mac.
-- Hosted Intel macOS runners are being retired. If none is available, run
-  the x86-64 build under Rosetta 2 on an arm64 runner and test natively on
-  real Intel hardware before each release.
+One part is still unproven: the GPU cells may have no GPU on hosted
+runners. If no software driver works there, those cells move to a
+self-hosted runner: the Linux VBOT server, and a real Mac.
 
 ## v0.1.x: verify and harden
 
@@ -97,14 +92,16 @@ Two cells are still unproven:
 - [ ] Get listed on [packs.iyi.dev](https://packs.iyi.dev)
       ([domify/iyipacks-website#1](https://github.com/domify/iyipacks-website/issues/1)),
       and propose a GUI category there.
-- [ ] CI: add a `permissions:` block, move to Node 24 actions, pin the SDL3_ttf
-      Windows package checksum from an independent source.
+- [ ] CI: move from the deprecated `macos-14` runner to `macos-15`, add a
+      `permissions:` block, move to Node 24 actions, pin the SDL3_ttf Windows
+      package checksum from an independent source.
 
 ## v0.2: five platforms and performance groundwork
 
-- **Linux arm64 and macOS x86-64 in CI.** Start with a spike that proves the
-  cross-compile, link and run path for one program on each, then move the
-  whole suite over.
+- **Linux arm64 and macOS x86-64 in CI** ([#1](https://github.com/Tuntii/kilim/issues/1),
+  [#2](https://github.com/Tuntii/kilim/issues/2)). Start with a spike that
+  proves the cross-compile, link and run path for one program on each, then
+  move the whole suite over.
 - **Benchmarks in CI** on every platform. Cases:
   - frame time for a tree of 100, 1,000 and 10,000 widgets;
   - a 10,000-row text list;
