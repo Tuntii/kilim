@@ -1,0 +1,101 @@
+# Draw culling and the preferred-size cache: off-clip children are not drawn,
+# unchanged subtrees are not measured again, and changes still reach layout.
+
+module test/cache_test
+
+import std/float
+import kilim/geom::{Rect, Size}
+import kilim/canvas::{Canvas}
+import kilim/widget::*
+import kilim/box::*
+import kilim/label::{Label}
+import kilim/scroll::{Scroll}
+import kilim/ui::{Ui}
+import kilim/testing::*
+
+# RecordCanvas that counts measure calls and can change its character width.
+class CountingCanvas < RecordCanvas
+  property char_w : Float32 = 8_f32
+  getter measures : Int32 = 0
+
+  pub def measure(s : String) : Size
+    @measures += 1
+    Size.new(s.size * @char_w, 16_f32)
+  end
+end
+
+def texts(rc : RecordCanvas) : Array(String)
+  rc.calls.select { |c| c.starts_with?("text ") }
+end
+
+def main : Int32
+  rc = CountingCanvas.new
+  list = Box.new(Axis::Column)
+  100.times { |i| list.add(Label.new("row #{i}")) }
+  scroll = Scroll.new(list)
+  root = Box.new(Axis::Column, [scroll] of Widget)
+  ui = Ui.new(root, rc, MemoryClipboard.new)
+  ui.resize(200_f32, 100_f32)
+  ui.frame
+
+  # Culling: rows are 16 high, the viewport 100, so rows 0..6 meet the clip (6 touches it at y=96..112).
+  drawn = texts(rc)
+  expect drawn.size == 7, "only rows meeting the clip are drawn (#{drawn.size})"
+  expect drawn[0].ends_with?(",row 0") && drawn[6].ends_with?(",row 6"), "the visible rows"
+  expect rc.visible?(Rect.new(-500, 9000, 10, 10)), "no clip: everything visible"
+  rc.push_clip(Rect.new(0, 0, 50, 50))
+  expect !rc.visible?(Rect.new(60, 0, 10, 10)), "outside the clip"
+  expect rc.visible?(Rect.new(40, 40, 20, 20)), "partly inside the clip"
+  rc.pop_clip
+
+  # Cache: a frame of an unchanged tree measures nothing.
+  n = rc.measures
+  root.invalidate
+  ui.frame
+  expect_eq rc.measures, n, "unchanged subtree is not measured again"
+
+  # Changing one label's text: only that label is measured again, and layout follows.
+  lbl = list.children[0].as(Label)
+  wide = list.children[1].as(Label)
+  expect_eq lbl.bounds.w, 194_f32, "row stretched across the list (200 - scrollbar)"
+  lbl.text = "a much longer row text"
+  ui.frame
+  expect_eq rc.measures, n + 1, "one label measured again"
+  expect_eq lbl.cached_preferred(rc).w, 22 * 8_f32, "preferred follows the text"
+  expect_eq list.cached_preferred(rc).w, 22 * 8_f32, "the parent's preferred follows too"
+  expect_eq wide.bounds.y, 16_f32, "next row unchanged"
+
+  # Removing and adding rows: the list's height follows.
+  h = list.bounds.h
+  list.remove(list.children[0])
+  ui.frame
+  expect_eq list.bounds.h, h - 16, "removing a row shrinks the list"
+  expect_eq list.children[0].bounds.y, 0_f32, "rows move up"
+  list.insert(0, Label.new("new first"))
+  list.add(Label.new("new last"))
+  rc.calls.clear
+  ui.frame
+  expect_eq list.bounds.h, h + 16, "adding rows grows the list"
+  expect texts(rc).any? { |t| t.ends_with?(",new first") }, "new row drawn"
+
+  # Sizing changes reach the parent's layout.
+  lbl2 = list.children[1].as(Label)
+  lbl2.sizing = Sizing.fixed(40)
+  ui.frame
+  expect_eq lbl2.bounds.h, 40_f32, "sizing change relayouts"
+
+  # Dropping caches: a new font width is picked up everywhere.
+  rc.char_w = 10_f32
+  root.invalidate
+  ui.frame
+  expect_eq list.cached_preferred(rc).w, 9 * 8_f32, "still cached before drop_caches (widest: new first)"
+  ui.drop_caches
+  expect ui.needs_frame?, "drop_caches requests a frame"
+  ui.frame
+  expect_eq list.cached_preferred(rc).w, 9 * 10_f32, "measured again after drop_caches"
+
+  puts "cache ok"
+  0
+end
+
+exit main

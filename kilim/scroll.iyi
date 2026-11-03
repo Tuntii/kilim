@@ -23,12 +23,12 @@ pub class Scroll < Widget
   end
 
   pub def preferred(c : Canvas) : Size
-    Size.new(@child.preferred(c).w + SCROLLBAR_W, CONTROL_H)
+    Size.new(@child.cached_preferred(c).w + SCROLLBAR_W, CONTROL_H)
   end
 
   pub def layout(r : Rect, c : Canvas) : Nil
     @bounds = r
-    @content_h = @child.preferred(c).h
+    @content_h = @child.cached_preferred(c).h
     clamp
     @child.layout(Rect.new(r.x, r.y - @offset, (r.w > SCROLLBAR_W ? r.w - SCROLLBAR_W : 0_f32), @content_h), c)
   end
