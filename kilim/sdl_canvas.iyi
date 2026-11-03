@@ -87,6 +87,14 @@ pub class SdlCanvas < Canvas
     apply_clip
   end
 
+  # Without a clip: the renderer's output, in logical units.
+  pub def visible?(r : Rect) : Bool
+    return r.overlaps?(@clips.last) unless @clips.empty?
+    w = h = 0
+    LibSDL3.SDL_GetCurrentRenderOutputSize(@renderer, pointerof(w), pointerof(h))
+    r.overlaps?(Rect.new(0_f32, 0_f32, w / @density, h / @density))
+  end
+
   pub def close : Nil
     return if @font.address == 0
     LibTTF.TTF_CloseFont(@font)

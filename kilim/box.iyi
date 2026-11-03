@@ -115,7 +115,8 @@ pub class Box < Widget
   end
 
   pub def draw(c : Canvas) : Nil
-    @kids.each { |w| w.draw(c) }
+    # Children outside the clip (scrolled away) are skipped.
+    @kids.each { |w| w.draw(c) if c.visible?(w.bounds) }
   end
 
   @kids : Array(Widget)

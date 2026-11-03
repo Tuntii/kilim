@@ -174,6 +174,7 @@ lib ::LibSDL3
   fun SDL_DestroyRenderer(renderer : Void*) : Void
   fun SDL_SetRenderDrawColor(renderer : Void*, r : UInt8, g : UInt8, b : UInt8, a : UInt8) : Bool
   fun SDL_SetRenderDrawBlendMode(renderer : Void*, mode : UInt32) : Bool
+  fun SDL_GetCurrentRenderOutputSize(renderer : Void*, w : Int32*, h : Int32*) : Bool
   fun SDL_SetRenderClipRect(renderer : Void*, rect : Rect*) : Bool
   fun SDL_RenderClear(renderer : Void*) : Bool
   fun SDL_RenderFillRect(renderer : Void*, rect : FRect*) : Bool

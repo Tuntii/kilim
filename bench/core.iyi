@@ -38,11 +38,20 @@ class NullCanvas < Canvas
     16_f32
   end
 
+  # Tracks clips like SdlCanvas, so culling works as it does on screen.
   pub def push_clip(r : Rect) : Nil
+    @clips << (@clips.empty? ? r : @clips.last.intersect(r))
   end
 
   pub def pop_clip : Nil
+    @clips.pop unless @clips.empty?
   end
+
+  pub def visible?(r : Rect) : Bool
+    @clips.empty? || r.overlaps?(@clips.last)
+  end
+
+  @clips : Array(Rect) = [] of Rect
 end
 
 def main : Int32
