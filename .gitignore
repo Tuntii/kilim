@@ -9,3 +9,6 @@ vendor/
 /smoke
 smoke.log
 todo.log
+# local planning notes, not part of the package
+docs/superpowers/
+.superpowers/
