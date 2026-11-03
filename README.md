@@ -78,13 +78,11 @@ ile denenir.
 ```
 module example.com/app
 
-require github.com/tuntii/kilim v0.0.0
-replace github.com/tuntii/kilim => ../GUI
+require github.com/tuntii/kilim v0.1.0
 ```
 
-Henüz yayımlanmış bir sürüm etiketi yok; şimdilik `replace` ile yerel yolu
-gösterin (`../GUI` yerine klonun yolu). v0.1.0 etiketi çıkınca `require` o sürümü
-adlandırır ve `replace` gerekmez.
+ya da `iyi get github.com/tuntii/kilim@v0.1.0`. Yerel bir klonla çalışmak için
+`replace github.com/tuntii/kilim => ../GUI` satırını ekleyin.
 Modül yolu küçük harftir: iyi büyük harfe izin vermez.
 
 Kodda:
