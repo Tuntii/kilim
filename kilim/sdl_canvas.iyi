@@ -14,6 +14,21 @@ import kilim/theme::*
 # Font embedded in the program (Noto Sans Regular, OFL: assets/fonts/OFL.txt).
 FONT_DATA = {{ read_file("#{__DIR__}/../assets/fonts/NotoSans-Regular.ttf") }}
 
+# A rasterized string, reused until evicted.
+struct TextTexture
+  getter texture : Void*
+  getter w : Float32
+  getter h : Float32
+
+  def initialize(@texture : Void*, @w : Float32, @h : Float32)
+  end
+end
+
+# shortcut: both caches are cleared whole when full (no LRU); a frame needs far fewer
+# entries than the limits, so this only costs a re-measure/re-raster burst while scrolling.
+MEASURE_CACHE_MAX = 4096
+TEXT_CACHE_MAX    = 1024
+
 pub class SdlCanvas < Canvas
   getter density : Float32
 
@@ -23,6 +38,8 @@ pub class SdlCanvas < Canvas
     @font = LibTTF.TTF_OpenFontIO(io, true, FONT_SIZE * @density)
     sdl_fatal("TTF_OpenFontIO") if @font.address == 0
     @clips = [] of Rect
+    @sizes = {} of String => Size
+    @textures = {} of Tuple(String, UInt8, UInt8, UInt8, UInt8) => TextTexture
     LibSDL3.SDL_SetRenderDrawBlendMode(@renderer, LibSDL3::BLENDMODE_BLEND)
   end
 
@@ -31,6 +48,14 @@ pub class SdlCanvas < Canvas
     return if d == @density
     @density = d
     LibTTF.TTF_SetFontSize(@font, FONT_SIZE * d)
+    @sizes.clear
+    drop_textures
+  end
+
+  # Textures cached so far are gone; e.g. after SDL reports a render device reset.
+  pub def drop_textures : Nil
+    @textures.each_value { |t| LibSDL3.SDL_DestroyTexture(t.texture) }
+    @textures.clear
   end
 
   pub def fill_rect(r : Rect, c : Color) : Nil
@@ -51,26 +76,37 @@ pub class SdlCanvas < Canvas
     LibSDL3.SDL_RenderLine(@renderer, x1 * d, y1 * d, x2 * d, y2 * d)
   end
 
-  # shortcut: the text texture is regenerated every frame; if big lists get slow, switch to a (text, color) cache
   pub def text(x : Float32, y : Float32, s : String, c : Color) : Nil
-    return if s.empty?
-    surface = LibTTF.TTF_RenderText_Blended(@font, s.to_unsafe, s.bytesize.to_u64, sdl_color(c))
-    return if surface.address == 0
-    texture = LibSDL3.SDL_CreateTextureFromSurface(@renderer, surface)
-    LibSDL3.SDL_DestroySurface(surface)
-    return if texture.address == 0
-    w = h = 0_f32
-    LibSDL3.SDL_GetTextureSize(texture, pointerof(w), pointerof(h))
+    return if s.empty? || @font.address == 0
+    key = {s, c.r, c.g, c.b, c.a}
+    t = @textures[key]?
+    unless t
+      surface = LibTTF.TTF_RenderText_Blended(@font, s.to_unsafe, s.bytesize.to_u64, sdl_color(c))
+      return if surface.address == 0
+      texture = LibSDL3.SDL_CreateTextureFromSurface(@renderer, surface)
+      LibSDL3.SDL_DestroySurface(surface)
+      return if texture.address == 0
+      w = h = 0_f32
+      LibSDL3.SDL_GetTextureSize(texture, pointerof(w), pointerof(h))
+      drop_textures if @textures.size >= TEXT_CACHE_MAX
+      t = TextTexture.new(texture, w, h)
+      @textures[key] = t
+    end
     # Rounded to whole pixels: at a fractional position the texture gets filtered and the text blurs.
-    dst = LibSDL3::FRect.new(x: (x * @density).round, y: (y * @density).round, w: w, h: h)
-    LibSDL3.SDL_RenderTexture(@renderer, texture, Pointer(LibSDL3::FRect).new(0_u64), pointerof(dst))
-    LibSDL3.SDL_DestroyTexture(texture)
+    dst = LibSDL3::FRect.new(x: (x * @density).round, y: (y * @density).round, w: t.w, h: t.h)
+    LibSDL3.SDL_RenderTexture(@renderer, t.texture, Pointer(LibSDL3::FRect).new(0_u64), pointerof(dst))
   end
 
   pub def measure(s : String) : Size
+    if m = @sizes[s]?
+      return m
+    end
     w = h = 0
     LibTTF.TTF_GetStringSize(@font, s.to_unsafe, s.bytesize.to_u64, pointerof(w), pointerof(h))
-    Size.new(w / @density, h / @density)
+    m = Size.new(w / @density, h / @density)
+    @sizes.clear if @sizes.size >= MEASURE_CACHE_MAX
+    @sizes[s] = m
+    m
   end
 
   pub def line_height : Float32
@@ -95,7 +131,9 @@ pub class SdlCanvas < Canvas
     r.overlaps?(Rect.new(0_f32, 0_f32, w / @density, h / @density))
   end
 
+  # Before the renderer is destroyed: the textures belong to it.
   pub def close : Nil
+    drop_textures
     return if @font.address == 0
     LibTTF.TTF_CloseFont(@font)
     @font = Pointer(Void).new(0_u64)
@@ -133,6 +171,8 @@ pub class SdlCanvas < Canvas
   @renderer : Void*
   @font : Void*
   @clips : Array(Rect)
+  @sizes : Hash(String, Size)
+  @textures : Hash(Tuple(String, UInt8, UInt8, UInt8, UInt8), TextTexture)
 end
 
 pub class SdlClipboard < Clipboard

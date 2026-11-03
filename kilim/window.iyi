@@ -166,6 +166,10 @@ pub class Window
       w = h = 0
       LibSDL3.SDL_GetWindowSize(@handle, pointerof(w), pointerof(h))
       @ui.dispatch Resize.new(w.to_f32, h.to_f32)
+    when LibSDL3::EVENT_RENDER_DEVICE_RESET
+      # The GPU device was recreated and its textures with it.
+      @canvas.drop_textures
+      relayout
     when LibSDL3::EVENT_MOUSE_MOTION
       m = ev.as(LibSDL3::MouseMotionEvent*).value
       @ui.dispatch MouseMove.new(m.x, m.y)

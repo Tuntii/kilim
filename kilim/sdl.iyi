@@ -29,6 +29,7 @@ lib ::LibSDL3
   EVENT_MOUSE_BUTTON_DOWN            = 0x401_u32
   EVENT_MOUSE_BUTTON_UP              = 0x402_u32
   EVENT_MOUSE_WHEEL                  = 0x403_u32
+  EVENT_RENDER_DEVICE_RESET          = 0x2001_u32
 
   BUTTON_LEFT   = 1_u8
   BUTTON_MIDDLE = 2_u8
