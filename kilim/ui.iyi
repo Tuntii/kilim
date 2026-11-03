@@ -1,6 +1,137 @@
-# Boş iskelet: Widget#handle imzası için gerekli. Gövdesi Task 4'te.
+# Olay dağıtımı (hover/capture/focus) ve frame (layout + çizim). SDL'den bağımsız.
 
 module kilim/ui
 
-pub class Ui
+import std/float
+import kilim/geom::{Rect}
+import kilim/canvas::{Canvas}
+import kilim/clipboard::{Clipboard}
+import kilim/event::*
+import kilim/widget::*
+import kilim/theme::*
+
+pub class Ui < Context
+  getter hovered : Widget? = nil
+  getter captured : Widget? = nil
+  getter focused : Widget? = nil
+  getter clipboard : Clipboard
+
+  def initialize(@root : Widget, @canvas : Canvas, @clipboard : Clipboard)
+    @w = 0_f32
+    @h = 0_f32
+    @root.needs_frame = true
+  end
+
+  pub def resize(w : Float32, h : Float32) : Nil
+    @w = w
+    @h = h
+    @root.needs_frame = true
+  end
+
+  pub def needs_frame? : Bool
+    @root.needs_frame
+  end
+
+  # Gerekliyse layout + çizim yapar; çizdiyse true.
+  pub def frame : Bool
+    return false unless @root.needs_frame
+    @root.needs_frame = false
+    @root.layout(Rect.new(0_f32, 0_f32, @w, @h), @canvas)
+    @canvas.fill_rect(Rect.new(0_f32, 0_f32, @w, @h), BG)
+    @root.draw(@canvas)
+    true
+  end
+
+  pub def focus(w : Widget?) : Nil
+    return if w == @focused
+    if o = @focused
+      o.focused = false
+    end
+    @focused = w
+    if n = w
+      n.focused = true
+    end
+    @root.needs_frame = true
+  end
+
+  pub def dispatch(e : Event) : Nil
+    sanitize
+    case e
+    when MouseMove
+      set_hover(@root.hit(e.x, e.y))
+    when MouseDown
+      set_hover(@root.hit(e.x, e.y))
+      # Olayı işleyen ilk widget capture alır; MouseUp ona gider.
+      @captured = bubble(@hovered, e)
+    when MouseUp
+      if c = @captured
+        c.handle(e, self)
+        @captured = nil
+      end
+    when Wheel
+      bubble(@root.hit(e.x, e.y), e)
+    when KeyDown, TextInput
+      if f = @focused
+        f.handle(e, self)
+      end
+    when Resize
+      resize(e.w, e.h)
+    end
+    sanitize
+  end
+
+  # Zinciri olay başlamadan dondurur: handler ağacı değiştirse de iterasyon bozulmaz.
+  # İşleyen widget'ı döndürür.
+  def bubble(start : Widget?, e : Event) : Widget?
+    chain = [] of Widget
+    w = start
+    while w
+      chain << w
+      w = w.parent
+    end
+    chain.each do |x|
+      return x if x.handle(e, self)
+    end
+    nil
+  end
+
+  def set_hover(w : Widget?) : Nil
+    return if w == @hovered
+    if o = @hovered
+      o.hovered = false
+    end
+    @hovered = w
+    if n = w
+      n.hovered = true
+    end
+    @root.needs_frame = true
+  end
+
+  # Ağaçtan kopan widget'lar hover/capture/focus'ta kalmasın.
+  def sanitize : Nil
+    if h = @hovered
+      unless h.attached_to?(@root)
+        h.hovered = false
+        @hovered = nil
+        @root.needs_frame = true
+      end
+    end
+    if c = @captured
+      unless c.attached_to?(@root)
+        c.pressed = false
+        @captured = nil
+      end
+    end
+    if f = @focused
+      unless f.attached_to?(@root)
+        f.focused = false
+        @focused = nil
+      end
+    end
+  end
+
+  @root : Widget
+  @canvas : Canvas
+  @w : Float32
+  @h : Float32
 end

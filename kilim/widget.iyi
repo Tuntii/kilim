@@ -5,7 +5,7 @@ module kilim/widget
 import kilim/geom::{Rect, Size}
 import kilim/canvas::{Canvas}
 import kilim/event::{Event}
-import kilim/ui::{Ui}
+import kilim/clipboard::{Clipboard}
 
 pub enum SizeMode
   Fit
@@ -60,7 +60,7 @@ pub abstract class Widget
     false
   end
 
-  pub def handle(e : Event, ui : Ui) : Bool
+  pub def handle(e : Event, ui : Context) : Bool
     false
   end
 
@@ -93,4 +93,11 @@ pub abstract class Widget
   pub def attached_to?(r : Widget) : Bool
     root == r
   end
+end
+
+# Widget'ların Ui'dan ihtiyaç duyduğu yüzey. Ui bunu uygular (widget -> ui döngüsünü önler).
+pub abstract class Context
+  pub abstract def clipboard : Clipboard
+  pub abstract def focused : Widget?
+  pub abstract def focus(w : Widget?) : Nil
 end

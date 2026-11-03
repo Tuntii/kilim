@@ -4,6 +4,7 @@ module kilim/testing
 
 import kilim/geom::{Rect, Size}
 import kilim/canvas::{Canvas, Color}
+import kilim/clipboard::{Clipboard}
 
 pub def expect(cond : Bool, msg : String) : Nil
   return if cond
@@ -52,4 +53,20 @@ pub class RecordCanvas < Canvas
   pub def pop_clip : Nil
     @calls << "unclip"
   end
+end
+
+pub class MemoryClipboard < Clipboard
+  def initialize
+    @text = ""
+  end
+
+  pub def get : String
+    @text
+  end
+
+  pub def set(s : String) : Nil
+    @text = s
+  end
+
+  @text : String
 end

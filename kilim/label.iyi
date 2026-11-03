@@ -1,0 +1,31 @@
+# Salt okunur metin.
+
+module kilim/label
+
+import kilim/geom::{Size}
+import kilim/canvas::{Canvas, Color}
+import kilim/widget::*
+import kilim/theme::*
+
+pub class Label < Widget
+  getter text : String
+
+  def initialize(@text : String, color : Color? = nil)
+    @color = color || FG
+  end
+
+  pub def text=(s : String) : Nil
+    @text = s
+    invalidate
+  end
+
+  pub def preferred(c : Canvas) : Size
+    c.measure(@text)
+  end
+
+  pub def draw(c : Canvas) : Nil
+    c.text(bounds.x, bounds.y, @text, @color)
+  end
+
+  @color : Color
+end

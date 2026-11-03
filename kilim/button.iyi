@@ -1,0 +1,60 @@
+# Tıklanabilir düğme; Space/Enter ile de tetiklenir.
+
+module kilim/button
+
+import std/float
+import kilim/geom::{Size}
+import kilim/canvas::{Canvas}
+import kilim/event::*
+import kilim/widget::*
+import kilim/theme::*
+
+pub class Button < Widget
+  getter text : String
+
+  def initialize(@text : String, @on_click : (-> Nil)? = nil)
+  end
+
+  pub def focusable? : Bool
+    true
+  end
+
+  pub def preferred(c : Canvas) : Size
+    Size.new(c.measure(@text).w + 2 * PADDING, CONTROL_H)
+  end
+
+  pub def draw(c : Canvas) : Nil
+    bg = pressed ? BUTTON_PRESSED : (hovered ? BUTTON_HOVER : BUTTON_BG)
+    c.fill_rect(bounds, bg)
+    c.stroke_rect(bounds, focused ? FOCUS_RING : BORDER)
+    c.text(bounds.x + PADDING, bounds.y + (bounds.h - c.line_height) / 2, @text, FG)
+  end
+
+  pub def handle(e : Event, ui : Context) : Bool
+    case e
+    when MouseDown
+      return false unless e.button.left?
+      self.pressed = true
+      invalidate
+      true
+    when MouseUp
+      return false unless pressed
+      self.pressed = false
+      invalidate
+      click if bounds.contains?(e.x, e.y)
+      true
+    when KeyDown
+      return false unless e.key.space? || e.key.enter?
+      click
+      true
+    else
+      false
+    end
+  end
+
+  def click : Nil
+    if f = @on_click
+      f.call
+    end
+  end
+end

@@ -1,0 +1,107 @@
+# Ui dispatch, Label ve Button.
+
+module test/button_test
+
+import kilim/geom::{Rect, Size}
+import kilim/event::*
+import kilim/widget::*
+import kilim/box::*
+import kilim/ui::{Ui}
+import kilim/label::{Label}
+import kilim/button::{Button}
+import kilim/testing::*
+
+class Counter
+  property n : Int32 = 0
+end
+
+def setup(n : Counter) : Tuple(Box, Button, Ui, RecordCanvas)
+  b = Button.new("Tamam", -> { n.n += 1; nil })
+  col = Box.new(Axis::Column, [b] of Widget)
+  rc = RecordCanvas.new
+  ui = Ui.new(col, rc, MemoryClipboard.new)
+  ui.resize(300_f32, 200_f32)
+  ui.frame
+  {col, b, ui, rc}
+end
+
+def click(ui : Ui, b : Button) : Nil
+  x = b.bounds.x + b.bounds.w / 2
+  y = b.bounds.y + b.bounds.h / 2
+  ui.dispatch MouseMove.new(x, y)
+  ui.dispatch MouseDown.new(x, y, MouseButton::Left)
+  ui.dispatch MouseUp.new(x, y, MouseButton::Left)
+end
+
+def main : Int32
+  # test_click
+  n = Counter.new
+  col, b, ui, rc = setup(n)
+  expect_eq b.bounds.h, 30_f32, "buton yüksekliği CONTROL_H"
+  expect_eq b.preferred(rc).w, 56_f32, "genişlik metin + 2*PADDING"
+  click(ui, b)
+  expect_eq n.n, 1, "click"
+  expect !b.pressed, "bırakınca pressed yok"
+
+  # test_drag_off
+  n = Counter.new
+  col, b, ui, rc = setup(n)
+  ui.dispatch MouseDown.new(5_f32, 5_f32, MouseButton::Left)
+  expect b.pressed, "basılınca pressed"
+  ui.dispatch MouseUp.new(250_f32, 150_f32, MouseButton::Left)
+  expect_eq n.n, 0, "dışarıda bırakma click değil"
+  expect !b.pressed, "pressed temizlendi"
+  expect ui.captured.nil?, "capture bırakıldı"
+
+  # test_keyboard
+  n = Counter.new
+  col, b, ui, rc = setup(n)
+  ui.focus(b)
+  expect b.focused, "focus bayrağı"
+  ui.dispatch KeyDown.new(Key::Space, Mods.new)
+  expect_eq n.n, 1, "Space"
+  ui.dispatch KeyDown.new(Key::Enter, Mods.new)
+  expect_eq n.n, 2, "Enter"
+
+  # hover
+  n = Counter.new
+  col, b, ui, rc = setup(n)
+  ui.dispatch MouseMove.new(5_f32, 5_f32)
+  expect b.hovered, "hover"
+  expect ui.needs_frame?, "hover değişimi invalidate"
+  ui.frame
+  ui.dispatch MouseMove.new(6_f32, 6_f32)
+  expect !ui.needs_frame?, "aynı widget'ta hover invalidate etmez"
+  ui.dispatch MouseMove.new(280_f32, 190_f32)
+  expect !b.hovered, "hover kalktı"
+
+  # kaldırma güvenliği
+  ui.dispatch MouseMove.new(5_f32, 5_f32)
+  ui.focus(b)
+  ui.dispatch MouseDown.new(5_f32, 5_f32, MouseButton::Left)
+  col.remove(b)
+  ui.dispatch MouseMove.new(5_f32, 5_f32)
+  expect ui.hovered != b && ui.captured.nil? && ui.focused.nil?, "kaldırılan widget temizlenir"
+
+  # test_add_during_click
+  col = Box.new(Axis::Column)
+  b2 = Button.new("Ekle", -> { col.add(Label.new("x")); nil })
+  col.add(b2)
+  rc = RecordCanvas.new
+  ui = Ui.new(col, rc, MemoryClipboard.new)
+  ui.resize(300_f32, 200_f32)
+  ui.frame
+  click(ui, b2)
+  expect ui.frame, "frame çizildi"
+  expect_eq col.children.size, 2, "yeni çocuk eklendi"
+  expect rc.calls.any?(&.includes?("text 0.0,30.0,x")), "yeni label çizildi"
+
+  # test_idle
+  expect !ui.frame, "olay yoksa çizim yok"
+  expect !ui.needs_frame?, "needs_frame temiz"
+
+  puts "button ok"
+  0
+end
+
+exit main

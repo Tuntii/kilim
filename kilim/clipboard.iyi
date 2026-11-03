@@ -1,0 +1,8 @@
+# Pano soyutlaması. SDL uygulaması kilim/sdl_* içinde; testte MemoryClipboard.
+
+module kilim/clipboard
+
+pub abstract class Clipboard
+  pub abstract def get : String
+  pub abstract def set(s : String) : Nil
+end
