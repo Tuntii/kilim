@@ -1,0 +1,95 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+env:
+  IYI_VERSION: 0.20.0
+  SDL_RENDER_DRIVER: software
+
+jobs:
+  smoke:
+    name: smoke (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            wrap: ""
+          - os: ubuntu-24.04
+            wrap: xvfb-run -a
+          - os: macos-14
+            wrap: ""
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # --- iyi 0.20.0 (installer de aynı etiketten, IYI_VERSION ile sabit) ---
+      - name: Install iyi (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          irm https://raw.githubusercontent.com/iyilang/iyi/v$env:IYI_VERSION/install.ps1 | iex
+          "$env:LOCALAPPDATA\Programs\iyi\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+      - name: Install iyi (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          curl -fsSL "https://raw.githubusercontent.com/iyilang/iyi/v$IYI_VERSION/install.sh" | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # --- SDL3 + SDL3_ttf ---
+      - name: MSVC dev shell
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+      - name: SDL (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/fetch-sdl.ps1
+
+      - name: Build deps (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build xvfb libx11-dev libxext-dev libxrandr-dev \
+            libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxtst-dev libxkbcommon-dev \
+            libgl-dev libegl-dev
+      - name: Cache SDL (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/cache@v4
+        with:
+          path: vendor/linux
+          key: sdl-linux-${{ hashFiles('scripts/sdl-versions.txt', 'scripts/build-sdl-linux.sh') }}
+      - name: SDL (Linux)
+        if: runner.os == 'Linux'
+        run: bash scripts/build-sdl-linux.sh
+
+      - name: SDL (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install sdl3 sdl3_ttf
+          # Homebrew'un lib dizini cc'nin varsayılan arama yolunda değil.
+          echo "IYI_LIBRARY_PATH=$(brew --prefix)/lib" >> "$GITHUB_ENV"
+
+      # --- smoke: önce varsayılan video sürücüsü; pencere açılamazsa offscreen ---
+      - name: Smoke
+        shell: bash
+        run: |
+          iyi version
+          if ${{ matrix.wrap }} iyi run examples/smoke.iyi 2>&1 | tee smoke.log; then
+            echo "video driver: default${{ matrix.wrap && ' (xvfb)' || '' }}"
+          elif grep -qE 'smoke FAIL: SDL_(Init|CreateWindow|CreateRenderer)' smoke.log; then
+            echo "window could not be opened, retrying with SDL_VIDEO_DRIVER=offscreen"
+            SDL_VIDEO_DRIVER=offscreen iyi run examples/smoke.iyi
+            echo "video driver: offscreen"
+          else
+            exit 1
+          fi
+
+      - name: Upload screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-${{ matrix.os }}
+          path: '*.bmp'
+          if-no-files-found: warn

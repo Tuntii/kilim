@@ -1,0 +1,56 @@
+# SDL3 ve SDL3_ttf bağlamaları. Yalnızca kilim'in çağırdığı fun'lar burada;
+# sonraki görevler eksik olanları ekler. İmzalar SDL3 başlıklarındaki C
+# tiplerinin karşılığıdır: `bool` -> Bool, `Uint32` -> UInt32, `int` -> Int32.
+
+module kilim/sdl
+
+# shortcut: iyi 0.20.0 bir `lib`'e `pub` yazdırmıyor ve modül içindeki `lib`
+# modülün kendisine kalıyor; `::` onu en üst seviyeye koyar, ama yine de yalnızca
+# `import kilim/sdl` yazan dosyalar görür. iyi `pub lib`'i kabul ederse ona geçilir.
+@[Link("SDL3")]
+lib ::LibSDL3
+  INIT_VIDEO = 0x00000020_u32
+
+  struct Rect
+    x : Int32
+    y : Int32
+    w : Int32
+    h : Int32
+  end
+
+  # SDL_Event 128 baytlık bir union'dır. Yalnızca `type` alanı burada; alt
+  # yapılar (SDL_KeyboardEvent vb.) bu struct'ın pointer'ı cast edilerek okunur.
+  # Dolgu UInt64 cinsinden, çünkü union'da 64 bitlik zaman damgaları var ve
+  # struct 8 bayta hizalanmalı: 4 (type) + 4 + 15 * 8 = 128.
+  struct Event
+    type : UInt32
+    reserved : UInt32
+    padding : StaticArray(UInt64, 15)
+  end
+
+  # `typedef bool (*SDL_EventFilter)(void *userdata, SDL_Event *event)`
+  alias EventFilter = (Void*, Event*) -> Bool
+
+  fun SDL_Init(flags : UInt32) : Bool
+  fun SDL_Quit : Void
+  fun SDL_GetError : UInt8*
+  fun SDL_CreateWindow(title : UInt8*, w : Int32, h : Int32, flags : UInt64) : Void*
+  fun SDL_DestroyWindow(window : Void*) : Void
+  fun SDL_CreateRenderer(window : Void*, name : UInt8*) : Void*
+  fun SDL_SetRenderDrawColor(renderer : Void*, r : UInt8, g : UInt8, b : UInt8, a : UInt8) : Bool
+  fun SDL_RenderClear(renderer : Void*) : Bool
+  fun SDL_RenderPresent(renderer : Void*) : Bool
+  fun SDL_RenderReadPixels(renderer : Void*, rect : Rect*) : Void*
+  fun SDL_SaveBMP(surface : Void*, file : UInt8*) : Bool
+  fun SDL_DestroySurface(surface : Void*) : Void
+  fun SDL_ReadSurfacePixel(surface : Void*, x : Int32, y : Int32, r : UInt8*, g : UInt8*, b : UInt8*, a : UInt8*) : Bool
+  fun SDL_PollEvent(event : Event*) : Bool
+  fun SDL_AddEventWatch(filter : EventFilter, userdata : Void*) : Bool
+  fun SDL_RemoveEventWatch(filter : EventFilter, userdata : Void*) : Void
+end
+
+@[Link("SDL3_ttf")]
+lib ::LibTTF
+  fun TTF_Init : Bool
+  fun TTF_Quit : Void
+end

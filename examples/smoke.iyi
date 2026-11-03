@@ -1,0 +1,89 @@
+# Task 1 spike'ı: SDL3 linklenir mi, C -> iyi callback'i (SDL_AddEventWatch)
+# çalışır mı, ekran görüntüsü alınabilir mi? Başarıda `smoke ok` yazar, 0 ile
+# çıkar; aksi hâlde nedenini yazar, 1 ile çıkar. smoke.bmp çalışma dizinine
+# yazılır.
+
+module examples/smoke
+
+import std/box::{Box}
+import kilim/sdl::*
+
+# Watch callback'inin saydığı olaylar. Sınıf, çünkü Box'tan çıkan referans
+# aynı nesneyi göstermeli; struct olsaydı kopyası artardı.
+class Counter
+  property count = 0
+end
+
+def c_string(ptr : UInt8*) : String
+  len = 0
+  while ptr[len] != 0_u8
+    len += 1
+  end
+  String.new(len) { |t| t.copy_from(ptr, len) }
+end
+
+def fail(why : String) : NoReturn
+  puts "smoke FAIL: #{why}: #{c_string(LibSDL3.SDL_GetError)}"
+  exit 1
+end
+
+def main : Int32
+  fail("SDL_Init") unless LibSDL3.SDL_Init(LibSDL3::INIT_VIDEO)
+  fail("TTF_Init") unless LibTTF.TTF_Init
+
+  # Watch pencereden önce kaydedilir: offscreen sürücüsü pencere olaylarını
+  # SDL_CreateWindow içinde, eşzamanlı olarak kuyruğa koyar; sonra kaydedilen
+  # bir watch hiçbir olay görmez.
+  counter = Counter.new
+  # Kutu bu değişkende yaşar: SDL'in elindeki tek kopya C tarafında, GC onu
+  # göremez. RemoveEventWatch'tan sonra tekrar kullanılarak canlı tutulur.
+  userdata = Box.box(counter)
+  # Closure değil: hiçbir yerel değişkeni yakalamaz, durumu userdata taşır.
+  watch = ->(data : Void*, event : LibSDL3::Event*) do
+    Box(Counter).unbox(data).count += 1
+    true
+  end
+  fail("SDL_AddEventWatch") unless LibSDL3.SDL_AddEventWatch(watch, userdata)
+
+  window = LibSDL3.SDL_CreateWindow("kilim smoke", 320, 200, 0_u64)
+  fail("SDL_CreateWindow") if window.address == 0
+  renderer = LibSDL3.SDL_CreateRenderer(window, Pointer(UInt8).new(0_u64))
+  fail("SDL_CreateRenderer") if renderer.address == 0
+
+  event = LibSDL3::Event.new
+  10.times do
+    while LibSDL3.SDL_PollEvent(pointerof(event))
+    end
+  end
+
+  LibSDL3.SDL_SetRenderDrawColor(renderer, 30_u8, 120_u8, 200_u8, 255_u8)
+  LibSDL3.SDL_RenderClear(renderer)
+  surface = LibSDL3.SDL_RenderReadPixels(renderer, Pointer(LibSDL3::Rect).new(0_u64))
+  fail("SDL_RenderReadPixels") if surface.address == 0
+  r = g = b = a = 0_u8
+  fail("SDL_ReadSurfacePixel") unless LibSDL3.SDL_ReadSurfacePixel(surface, 10, 10, pointerof(r), pointerof(g), pointerof(b), pointerof(a))
+  fail("SDL_SaveBMP") unless LibSDL3.SDL_SaveBMP(surface, "smoke.bmp")
+  LibSDL3.SDL_DestroySurface(surface)
+  LibSDL3.SDL_RenderPresent(renderer)
+
+  LibSDL3.SDL_RemoveEventWatch(watch, userdata)
+  calls = Box(Counter).unbox(userdata).count
+
+  LibSDL3.SDL_DestroyWindow(window)
+  LibTTF.TTF_Quit
+  LibSDL3.SDL_Quit
+
+  if calls == 0
+    puts "smoke FAIL: event watch was never called"
+    return 1
+  end
+  unless r == 30 && g == 120 && b == 200
+    puts "smoke FAIL: pixel (10,10) is (#{r}, #{g}, #{b}), expected (30, 120, 200)"
+    return 1
+  end
+  puts "watch calls: #{calls}"
+  puts "smoke ok"
+  0
+end
+
+exit main

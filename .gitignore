@@ -1,0 +1,10 @@
+vendor/
+*.bmp
+# iyi build çıktıları
+*.exe
+*.pdb
+*.ilk
+*.obj
+*.o
+/smoke
+smoke.log
