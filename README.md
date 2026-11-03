@@ -121,6 +121,8 @@ Ctrl/Cmd+C copies the whole text), mobile and web, persistence.
 Every change redraws the whole window, and text is rasterised again on each
 draw (no cache). Borders are 1 physical pixel thin on HiDPI screens.
 
+What comes next is in [ROADMAP.md](ROADMAP.md).
+
 ## Manual checklist
 
 CI runs without a visible display, so check these by hand on a real screen:
