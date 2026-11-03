@@ -3,8 +3,12 @@
 
 module bench/render
 
-import bench/timing::{todo_tree, header, measure}
+import bench/timing::{todo_tree, set_row_text, header, measure}
 import kilim
+import kilim/widget::{Widget, Sizing}
+import kilim/box::{Box, Axis}
+import kilim/textbox::{Textbox}
+import kilim/event::{TextInput}
 
 def main : Int32
   driver = ENV["SDL_RENDER_DRIVER"]? || "default"
@@ -14,7 +18,40 @@ def main : Int32
     win = Kilim.window("kilim bench", 480, 420, root)
     win.step
     measure("full frame (layout + draw + present)", n, 3000.0, -> { root.invalidate; win.step; nil })
+
+    k = 0
+    measure("change one row's text, then frame", n, 3000.0, -> {
+      k += 1
+      set_row_text(root, 0, "Task 1: renamed #{k}")
+      win.step
+      nil
+    })
+
+    # Ui's size alternates (the window stays), so every run is a real relayout.
+    narrow = false
+    measure("relayout after resize", n, 3000.0, -> {
+      narrow = !narrow
+      win.ui.resize(narrow ? 470_f32 : 480_f32, 420_f32)
+      win.step
+      nil
+    })
     win.close
+
+    # 50 keystrokes into a textbox above the list, a frame after each.
+    tb = Textbox.new("type here")
+    tb.sizing = Sizing.fit
+    win2 = Kilim.window("kilim bench", 480, 420, Box.new(Axis::Column, [tb, todo_tree(n)] of Widget))
+    win2.ui.focus(tb)
+    win2.step
+    measure("50 keystrokes, frame after each", n, 3000.0, -> {
+      50.times do
+        win2.inject TextInput.new("a")
+        win2.step
+      end
+      tb.text = ""
+      nil
+    })
+    win2.close
   end
   0
 end
