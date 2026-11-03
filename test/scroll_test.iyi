@@ -1,0 +1,88 @@
+# Scroll: kaydırma, clamp, vurulma, çizim.
+
+module test/scroll_test
+
+import kilim/geom::{Rect, Size}
+import kilim/canvas::{Canvas}
+import kilim/event::*
+import kilim/widget::*
+import kilim/box::*
+import kilim/ui::{Ui}
+import kilim/scroll::{Scroll}
+import kilim/testing::*
+
+class Dummy < Widget
+  pub def preferred(c : Canvas) : Size
+    Size.new(50_f32, 10_f32)
+  end
+
+  pub def draw(c : Canvas) : Nil
+  end
+end
+
+def setup : Tuple(Box, Scroll, Ui, RecordCanvas)
+  col = Box.new(Axis::Column)
+  30.times do
+    d = Dummy.new
+    d.sizing = Sizing.fixed(40_f32)
+    col.add(d)
+  end
+  scroll = Scroll.new(col)
+  scroll.sizing = Sizing.fixed(200_f32)
+  root = Box.new(Axis::Column, [scroll] of Widget)
+  rc = RecordCanvas.new
+  ui = Ui.new(root, rc, MemoryClipboard.new)
+  ui.resize(300_f32, 400_f32)
+  ui.frame
+  {col, scroll, ui, rc}
+end
+
+def wheel(ui : Ui, s : Scroll, dy : Float32) : Nil
+  ui.dispatch Wheel.new(s.bounds.x + 10, s.bounds.y + 10, dy)
+  ui.frame
+end
+
+def main : Int32
+  # test_wheel
+  col, scroll, ui, rc = setup
+  expect_eq scroll.bounds.h, 200_f32, "viewport yüksekliği"
+  3.times { wheel(ui, scroll, -1_f32) }
+  expect_eq scroll.offset, 120_f32, "3 tekerlek aşağı"
+  expect_eq col.bounds.y, -120_f32, "çocuk kaydı"
+  wheel(ui, scroll, 10_f32)
+  expect_eq scroll.offset, 0_f32, "yukarı clamp"
+  wheel(ui, scroll, -1000_f32)
+  expect_eq scroll.offset, 30 * 40 - 200_f32, "aşağı clamp"
+
+  # test_hit
+  col, scroll, ui, rc = setup
+  wheel(ui, scroll, -1000_f32)
+  y = scroll.bounds.y + scroll.bounds.h + 5
+  h = scroll.root.hit(10_f32, y)
+  expect h.nil? || !h.is_a?(Dummy), "görünmeyen tıklanmaz"
+  h2 = scroll.root.hit(10_f32, 5_f32)
+  expect h2.is_a?(Dummy), "görünen vurulur"
+
+  # test_draw
+  col, scroll, ui, rc = setup
+  rc.calls.clear
+  scroll.invalidate
+  ui.frame
+  i = rc.calls.index { |s| s.starts_with?("clip") }
+  expect !i.nil?, "clip var"
+  expect rc.calls.includes?("unclip"), "unclip var"
+  expect rc.calls.any? { |s| s.starts_with?("fill 294") }, "thumb çizildi"
+
+  # test_offset_clamped_after_shrink
+  col, scroll, ui, rc = setup
+  wheel(ui, scroll, -1000_f32)
+  kids = col.children.dup
+  25.times { |k| col.remove(kids[k]) }
+  ui.frame
+  expect_eq scroll.offset, 0_f32, "içerik küçülünce offset düşer"
+
+  puts "scroll_test OK"
+  0
+end
+
+exit main

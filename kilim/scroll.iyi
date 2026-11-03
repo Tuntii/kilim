@@ -1,0 +1,70 @@
+# Dikey kaydırma kapsayıcısı; tek çocuğu clip ile gösterir.
+
+module kilim/scroll
+
+import std/float
+import kilim/geom::{Rect, Size}
+import kilim/canvas::{Canvas}
+import kilim/event::*
+import kilim/widget::*
+import kilim/theme::*
+
+pub class Scroll < Widget
+  getter offset : Float32 = 0_f32
+  @content_h : Float32 = 0_f32
+
+  def initialize(@child : Widget)
+    @child.parent = self
+    self.sizing = Sizing.fill
+  end
+
+  pub def children : Array(Widget)
+    [@child] of Widget
+  end
+
+  pub def preferred(c : Canvas) : Size
+    Size.new(@child.preferred(c).w + SCROLLBAR_W, CONTROL_H)
+  end
+
+  pub def layout(r : Rect, c : Canvas) : Nil
+    @bounds = r
+    @content_h = @child.preferred(c).h
+    clamp
+    @child.layout(Rect.new(r.x, r.y - @offset, r.w - SCROLLBAR_W, @content_h), c)
+  end
+
+  pub def handle(e : Event, ui : Context) : Bool
+    return false unless e.is_a?(Wheel)
+    @offset -= e.dy * WHEEL_STEP
+    clamp
+    invalidate
+    true
+  end
+
+  pub def draw(c : Canvas) : Nil
+    c.push_clip(@bounds)
+    @child.draw(c)
+    c.pop_clip
+    range = @content_h - @bounds.h
+    if range > 0
+      th = @bounds.h * @bounds.h / @content_h
+      ty = @bounds.y + @offset / range * (@bounds.h - th)
+      c.fill_rect(Rect.new(@bounds.x + @bounds.w - SCROLLBAR_W, ty, SCROLLBAR_W, th), SCROLLBAR)
+    end
+  end
+
+  # Görünür alanın dışındaki (kaydırılmış) çocuklar vurulamaz.
+  pub def hit(x : Float32, y : Float32) : Widget?
+    return nil unless @bounds.contains?(x, y)
+    @child.hit(x, y) || self
+  end
+
+  def clamp : Nil
+    max = @content_h - @bounds.h
+    max = 0_f32 if max < 0
+    @offset = max if @offset > max
+    @offset = 0_f32 if @offset < 0
+  end
+
+  @child : Widget
+end
