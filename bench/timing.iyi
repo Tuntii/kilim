@@ -25,6 +25,16 @@ pub def todo_tree(n : Int32) : Box
   Box.new(Axis::Column, [scroll] of Widget, 12_f32, 8_f32)
 end
 
+# Gives row `i` of a todo_tree a new text. Checkbox text is fixed after
+# construction, so the row's checkbox is replaced, as an app would do.
+pub def set_row_text(root : Box, i : Int32, text : String) : Nil
+  row = root.children[0].children[0].children[i].as(Box)
+  row.remove(row.children[0])
+  check = Checkbox.new(text)
+  check.sizing = Sizing.fill
+  row.insert(0, check)
+end
+
 pub def header(title : String) : Nil
   puts ""
   puts "### #{title}"

@@ -158,10 +158,18 @@ pub class Window
     when LibSDL3::EVENT_QUIT, LibSDL3::EVENT_WINDOW_CLOSE_REQUESTED
       @quit = true
     when LibSDL3::EVENT_WINDOW_PIXEL_SIZE_CHANGED, LibSDL3::EVENT_WINDOW_DISPLAY_SCALE_CHANGED
-      @canvas.set_density(LibSDL3.SDL_GetWindowPixelDensity(@handle))
+      d = LibSDL3.SDL_GetWindowPixelDensity(@handle)
+      if d != @canvas.density
+        @canvas.set_density(d)
+        @ui.drop_caches
+      end
       w = h = 0
       LibSDL3.SDL_GetWindowSize(@handle, pointerof(w), pointerof(h))
       @ui.dispatch Resize.new(w.to_f32, h.to_f32)
+    when LibSDL3::EVENT_RENDER_DEVICE_RESET
+      # The GPU device was recreated and its textures with it.
+      @canvas.drop_textures
+      relayout
     when LibSDL3::EVENT_MOUSE_MOTION
       m = ev.as(LibSDL3::MouseMotionEvent*).value
       @ui.dispatch MouseMove.new(m.x, m.y)

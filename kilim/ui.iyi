@@ -28,6 +28,12 @@ pub class Ui < Context
     @root.needs_frame = true
   end
 
+  # After a font size or pixel density change: every widget measures again.
+  pub def drop_caches : Nil
+    @root.drop_caches
+    @root.needs_frame = true
+  end
+
   pub def needs_frame? : Bool
     @root.needs_frame
   end

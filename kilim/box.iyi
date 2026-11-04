@@ -62,7 +62,7 @@ pub class Box < Widget
     main = 0_f32
     cross = 0_f32
     @kids.each do |w|
-      s = w.preferred(c)
+      s = w.cached_preferred(c)
       m = w.sizing.mode.fixed? ? w.sizing.value : (@axis.row? ? s.w : s.h)
       x = @axis.row? ? s.h : s.w
       main += m
@@ -83,27 +83,26 @@ pub class Box < Widget
     n = @kids.size
     used = 0_f32
     weights = 0_f32
+    # Each child's main-axis size before Fill shares are known (Fill: 0); one preferred call per child.
+    sizes = Array(Float32).new(n)
     @kids.each do |w|
-      case w.sizing.mode
-      when SizeMode::Fill  then weights += w.sizing.value
-      when SizeMode::Fixed then used += w.sizing.value
-      else
-        s = w.preferred(c)
-        used += row ? s.w : s.h
-      end
+      size = case w.sizing.mode
+             when SizeMode::Fill  then 0_f32
+             when SizeMode::Fixed then w.sizing.value
+             else
+               s = w.cached_preferred(c)
+               row ? s.w : s.h
+             end
+      weights += w.sizing.value if w.sizing.mode.fill?
+      used += size
+      sizes << size
     end
     gaps = n > 1 ? @spacing * (n - 1) : 0_f32
     free = inner_main - used - gaps
     free = 0_f32 if free < 0
     pos = row ? inner.x : inner.y
-    @kids.each do |w|
-      size = case w.sizing.mode
-             when SizeMode::Fill  then weights > 0 ? free * w.sizing.value / weights : 0_f32
-             when SizeMode::Fixed then w.sizing.value
-             else
-               s = w.preferred(c)
-               row ? s.w : s.h
-             end
+    @kids.each_with_index do |w, i|
+      size = w.sizing.mode.fill? ? (weights > 0 ? free * w.sizing.value / weights : 0_f32) : sizes[i]
       size = 0_f32 if size < 0
       if row
         w.layout(Rect.new(pos, inner.y, size, inner_cross), c)
@@ -115,7 +114,8 @@ pub class Box < Widget
   end
 
   pub def draw(c : Canvas) : Nil
-    @kids.each { |w| w.draw(c) }
+    # Children outside the clip (scrolled away) are skipped.
+    @kids.each { |w| w.draw(c) if c.visible?(w.bounds) }
   end
 
   @kids : Array(Widget)

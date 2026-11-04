@@ -4,7 +4,7 @@
 module bench/core
 
 import std/float
-import bench/timing::{todo_tree, header, measure}
+import bench/timing::{todo_tree, set_row_text, header, measure}
 
 import kilim/geom::{Rect, Size}
 import kilim/canvas::{Canvas, Color}
@@ -38,11 +38,20 @@ class NullCanvas < Canvas
     16_f32
   end
 
+  # Tracks clips like SdlCanvas, so culling works as it does on screen.
   pub def push_clip(r : Rect) : Nil
+    @clips << (@clips.empty? ? r : @clips.last.intersect(r))
   end
 
   pub def pop_clip : Nil
+    @clips.pop unless @clips.empty?
   end
+
+  pub def visible?(r : Rect) : Bool
+    @clips.empty? || r.overlaps?(@clips.last)
+  end
+
+  @clips : Array(Rect) = [] of Rect
 end
 
 def main : Int32
@@ -54,6 +63,23 @@ def main : Int32
     ui.frame
 
     measure("full frame (layout + draw)", n, 1500.0, -> { root.invalidate; ui.frame; nil })
+
+    k = 0
+    measure("change one row's text, then frame", n, 1500.0, -> {
+      k += 1
+      set_row_text(root, 0, "Task 1: renamed #{k}")
+      ui.frame
+      nil
+    })
+
+    # The width alternates, so every run is a real relayout.
+    narrow = false
+    measure("relayout after resize", n, 1500.0, -> {
+      narrow = !narrow
+      ui.resize(narrow ? 470_f32 : 480_f32, 420_f32)
+      ui.frame
+      nil
+    })
 
     # 100 pointer moves between two rows; each one changes the hovered widget.
     measure("100 mouse moves (hit-test + hover)", n, 1500.0, -> {

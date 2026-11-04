@@ -37,7 +37,7 @@ end
 pub abstract class Widget
   property bounds : Rect = Rect.new(0, 0, 0, 0)
   property parent : Widget? = nil
-  property sizing : Sizing = Sizing.fit
+  getter sizing : Sizing = Sizing.fit
   # Only Ui writes this.
   property hovered : Bool = false
   property pressed : Bool = false
@@ -51,6 +51,32 @@ pub abstract class Widget
 
   pub abstract def preferred(c : Canvas) : Size
   pub abstract def draw(c : Canvas) : Nil
+
+  # Only the parent's layout reads a widget's sizing.
+  pub def sizing=(s : Sizing) : Nil
+    @sizing = s
+    if p = @parent
+      p.invalidate
+    end
+  end
+
+  # `preferred`, computed once until `invalidate` (or `drop_caches`).
+  # Containers call this on their children, never `preferred` directly.
+  # shortcut: the cache assumes one canvas (one font) per tree; call drop_caches when that changes.
+  pub def cached_preferred(c : Canvas) : Size
+    if s = @preferred_cache
+      return s
+    end
+    s = preferred(c)
+    @preferred_cache = s
+    s
+  end
+
+  # Forgets the cached sizes of the whole subtree, e.g. when the font size or pixel density changes.
+  pub def drop_caches : Nil
+    @preferred_cache = nil
+    children.each { |k| k.drop_caches }
+  end
 
   pub def layout(r : Rect, c : Canvas) : Nil
     @bounds = r
@@ -84,8 +110,19 @@ pub abstract class Widget
     w
   end
 
+  # Something about this widget changed: it and every ancestor measure again, and the root redraws.
   pub def invalidate : Nil
-    root.needs_frame = true
+    w = self
+    w.forget_preferred
+    while p = w.parent
+      w = p
+      w.forget_preferred
+    end
+    w.needs_frame = true
+  end
+
+  def forget_preferred : Nil
+    @preferred_cache = nil
   end
 
   # The deepest widget hit; children are checked from last to first (topmost first).
@@ -105,6 +142,8 @@ pub abstract class Widget
   pub def attached_to?(r : Widget) : Bool
     root == r
   end
+
+  @preferred_cache : Size? = nil
 end
 
 # The surface widgets need from Ui. Ui implements it (avoids a widget -> ui cycle).

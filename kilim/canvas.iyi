@@ -23,4 +23,6 @@ pub abstract class Canvas
   pub abstract def line_height : Float32
   pub abstract def push_clip(r : Rect) : Nil
   pub abstract def pop_clip : Nil
+  # Could anything drawn inside r show: does it meet the current clip (the whole surface without one)?
+  pub abstract def visible?(r : Rect) : Bool
 end

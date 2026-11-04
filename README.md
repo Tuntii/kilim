@@ -183,12 +183,11 @@ kilim is at **v0.1**: small, tested, and young. Not there yet:
 - accessibility (screen readers);
 - mobile and web.
 
-Every change redraws the whole window, and text is rasterised again on each
-draw, including rows scrolled out of view. On a Windows desktop a full frame
-of the to-do list takes about 19 ms with 100 rows and 180 ms with 1,000 rows;
-kilim's own layout and draw work is under 1 ms of that, and the rest is text
-rendering. Making that fast, and adding a GPU backend, comes first in the
-[roadmap](ROADMAP.md). Progress is tracked on the
+Every change still redraws the whole window, but rows scrolled out of view are
+skipped, widget sizes are cached and rendered text is reused. On a Windows
+desktop a full frame of the to-do list takes about 0.4 ms with 100 rows,
+0.6 ms with 1,000 and 3 ms with 10,000 (19 ms, 184 ms and 1.8 s in v0.1.1).
+Partial redraws come next in the [roadmap](ROADMAP.md). Progress is tracked on the
 [project board](https://github.com/users/Tuntii/projects/4).
 
 ## Contributing

@@ -32,6 +32,11 @@ pub struct Rect
     Rect.new(x1, y1, x2 - x1, y2 - y1)
   end
 
+  # Do the two rects overlap or touch? Edges count, so zero-size rects inside still match.
+  pub def overlaps?(o : Rect) : Bool
+    @x <= o.x + o.w && o.x <= @x + @w && @y <= o.y + o.h && o.y <= @y + @h
+  end
+
   # Inset by p on every edge; w/h is never negative.
   pub def inset(p : Float32) : Rect
     w = @w - 2 * p

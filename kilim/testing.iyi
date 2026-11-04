@@ -48,11 +48,20 @@ pub class RecordCanvas < Canvas
 
   pub def push_clip(r : Rect) : Nil
     @calls << "clip #{r.x},#{r.y},#{r.w},#{r.h}"
+    @clips << (@clips.empty? ? r : @clips.last.intersect(r))
   end
 
   pub def pop_clip : Nil
     @calls << "unclip"
+    @clips.pop unless @clips.empty?
   end
+
+  # No surface size: without a clip everything is visible.
+  pub def visible?(r : Rect) : Bool
+    @clips.empty? || r.overlaps?(@clips.last)
+  end
+
+  @clips : Array(Rect) = [] of Rect
 end
 
 pub class MemoryClipboard < Clipboard

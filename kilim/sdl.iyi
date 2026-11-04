@@ -29,6 +29,7 @@ lib ::LibSDL3
   EVENT_MOUSE_BUTTON_DOWN            = 0x401_u32
   EVENT_MOUSE_BUTTON_UP              = 0x402_u32
   EVENT_MOUSE_WHEEL                  = 0x403_u32
+  EVENT_RENDER_DEVICE_RESET          = 0x2001_u32
 
   BUTTON_LEFT   = 1_u8
   BUTTON_MIDDLE = 2_u8
@@ -174,6 +175,7 @@ lib ::LibSDL3
   fun SDL_DestroyRenderer(renderer : Void*) : Void
   fun SDL_SetRenderDrawColor(renderer : Void*, r : UInt8, g : UInt8, b : UInt8, a : UInt8) : Bool
   fun SDL_SetRenderDrawBlendMode(renderer : Void*, mode : UInt32) : Bool
+  fun SDL_GetCurrentRenderOutputSize(renderer : Void*, w : Int32*, h : Int32*) : Bool
   fun SDL_SetRenderClipRect(renderer : Void*, rect : Rect*) : Bool
   fun SDL_RenderClear(renderer : Void*) : Bool
   fun SDL_RenderFillRect(renderer : Void*, rect : FRect*) : Bool
