@@ -1,0 +1,362 @@
+# Win32, Direct2D and DirectWrite bindings. Only what kilim calls is here.
+# Win32 functions are plain C; Direct2D and DirectWrite are COM, so their methods
+# are called through the object's vtable with `com` (slot numbers are the
+# method's position in the interface, inherited methods first).
+
+module kilim/win32
+
+import std/int
+import std/static_array
+
+# shortcut: iyi 0.20.0 does not accept `pub` on a `lib`; `::` puts it at the top level
+# for files that `import kilim/win32` (same as kilim/sdl).
+@[Link("user32")]
+@[Link("gdi32")]
+@[Link("kernel32")]
+lib ::LibWin
+  struct WndClassExW
+    cb_size : UInt32
+    style : UInt32
+    wnd_proc : (Void*, UInt32, UInt64, Int64) -> Int64
+    cls_extra : Int32
+    wnd_extra : Int32
+    instance : Void*
+    icon : Void*
+    cursor : Void*
+    background : Void*
+    menu_name : UInt16*
+    class_name : UInt16*
+    icon_sm : Void*
+  end
+
+  struct Msg
+    hwnd : Void*
+    message : UInt32
+    wparam : UInt64
+    lparam : Int64
+    time : UInt32
+    pt_x : Int32
+    pt_y : Int32
+    private : UInt32
+  end
+
+  struct Point
+    x : Int32
+    y : Int32
+  end
+
+  struct RectI
+    left : Int32
+    top : Int32
+    right : Int32
+    bottom : Int32
+  end
+
+  struct BitmapInfoHeader
+    size : UInt32
+    width : Int32
+    height : Int32
+    planes : UInt16
+    bit_count : UInt16
+    compression : UInt32
+    size_image : UInt32
+    x_ppm : Int32
+    y_ppm : Int32
+    clr_used : UInt32
+    clr_important : UInt32
+  end
+
+  fun GetModuleHandleW(name : UInt16*) : Void*
+  # Int32: the prelude declares the same C function that way.
+  fun GetLastError : Int32
+  fun RegisterClassExW(wc : WndClassExW*) : UInt16
+  fun CreateWindowExW(ex : UInt32, cls : UInt16*, title : UInt16*, style : UInt32, x : Int32, y : Int32, w : Int32, h : Int32, parent : Void*, menu : Void*, inst : Void*, param : Void*) : Void*
+  fun DefWindowProcW(hwnd : Void*, msg : UInt32, wp : UInt64, lp : Int64) : Int64
+  fun DestroyWindow(hwnd : Void*) : Int32
+  fun ShowWindow(hwnd : Void*, cmd : Int32) : Int32
+  fun UpdateWindow(hwnd : Void*) : Int32
+  fun SetWindowPos(hwnd : Void*, after : Void*, x : Int32, y : Int32, w : Int32, h : Int32, flags : UInt32) : Int32
+  fun GetClientRect(hwnd : Void*, r : RectI*) : Int32
+  fun AdjustWindowRectExForDpi(r : RectI*, style : UInt32, menu : Int32, ex : UInt32, dpi : UInt32) : Int32
+  fun ValidateRect(hwnd : Void*, r : RectI*) : Int32
+  fun InvalidateRect(hwnd : Void*, r : RectI*, erase : Int32) : Int32
+  fun ScreenToClient(hwnd : Void*, p : Point*) : Int32
+  fun SetCapture(hwnd : Void*) : Void*
+  fun ReleaseCapture : Int32
+  fun GetKeyState(vk : Int32) : Int16
+  fun SetWindowLongPtrW(hwnd : Void*, index : Int32, value : Int64) : Int64
+  fun GetWindowLongPtrW(hwnd : Void*, index : Int32) : Int64
+  fun LoadCursorW(inst : Void*, name : UInt64) : Void*
+  fun SetProcessDpiAwarenessContext(ctx : Int64) : Int32
+  fun GetDpiForWindow(hwnd : Void*) : UInt32
+  fun PeekMessageW(msg : Msg*, hwnd : Void*, min : UInt32, max : UInt32, remove : UInt32) : Int32
+  fun TranslateMessage(msg : Msg*) : Int32
+  fun DispatchMessageW(msg : Msg*) : Int64
+  fun PostMessageW(hwnd : Void*, msg : UInt32, wp : UInt64, lp : Int64) : Int32
+  fun SendMessageW(hwnd : Void*, msg : UInt32, wp : UInt64, lp : Int64) : Int64
+  fun MsgWaitForMultipleObjectsEx(count : UInt32, handles : Void*, ms : UInt32, wake : UInt32, flags : UInt32) : UInt32
+  fun OpenClipboard(hwnd : Void*) : Int32
+  fun CloseClipboard : Int32
+  fun EmptyClipboard : Int32
+  fun GetClipboardData(format : UInt32) : Void*
+  fun SetClipboardData(format : UInt32, mem : Void*) : Void*
+  fun GlobalAlloc(flags : UInt32, bytes : UInt64) : Void*
+  fun GlobalFree(mem : Void*) : Void*
+  fun GlobalLock(mem : Void*) : Void*
+  fun GlobalUnlock(mem : Void*) : Int32
+  fun GetDC(hwnd : Void*) : Void*
+  fun ReleaseDC(hwnd : Void*, dc : Void*) : Int32
+  fun CreateCompatibleDC(dc : Void*) : Void*
+  fun DeleteDC(dc : Void*) : Int32
+  fun CreateDIBSection(dc : Void*, bmi : BitmapInfoHeader*, usage : UInt32, bits : Void**, section : Void*, offset : UInt32) : Void*
+  fun SelectObject(dc : Void*, obj : Void*) : Void*
+  fun DeleteObject(obj : Void*) : Int32
+end
+
+@[Link("imm32")]
+lib ::LibImm
+  fun ImmAssociateContextEx(hwnd : Void*, himc : Void*, flags : UInt32) : Int32
+  fun ImmGetContext(hwnd : Void*) : Void*
+  fun ImmReleaseContext(hwnd : Void*, himc : Void*) : Int32
+end
+
+@[Link("d2d1")]
+lib ::LibD2D
+  struct ColorF
+    r : Float32
+    g : Float32
+    b : Float32
+    a : Float32
+  end
+
+  struct RectF
+    left : Float32
+    top : Float32
+    right : Float32
+    bottom : Float32
+  end
+
+  struct SizeU
+    width : UInt32
+    height : UInt32
+  end
+
+  struct RenderTargetProps
+    type : UInt32
+    format : UInt32
+    alpha_mode : UInt32
+    dpi_x : Float32
+    dpi_y : Float32
+    usage : UInt32
+    min_level : UInt32
+  end
+
+  struct HwndProps
+    hwnd : Void*
+    width : UInt32
+    height : UInt32
+    present : UInt32
+  end
+
+  struct Guid
+    d1 : UInt32
+    d2 : UInt16
+    d3 : UInt16
+    d4 : StaticArray(UInt8, 8)
+  end
+
+  fun D2D1CreateFactory(type : UInt32, riid : Guid*, opts : Void*, out : Void**) : Int32
+end
+
+@[Link("dwrite")]
+lib ::LibDWrite
+  struct TextMetrics
+    left : Float32
+    top : Float32
+    width : Float32
+    width_trailing : Float32
+    height : Float32
+    layout_width : Float32
+    layout_height : Float32
+    bidi_depth : UInt32
+    line_count : UInt32
+  end
+
+  fun DWriteCreateFactory(type : UInt32, riid : LibD2D::Guid*, out : Void**) : Int32
+end
+
+pub WM_NCCREATE      = 0x0081_u32
+pub WM_SIZE          = 0x0005_u32
+pub WM_PAINT         = 0x000F_u32
+pub WM_CLOSE         = 0x0010_u32
+pub WM_QUIT          = 0x0012_u32
+pub WM_ERASEBKGND    = 0x0014_u32
+pub WM_KEYDOWN       = 0x0100_u32
+pub WM_CHAR          = 0x0102_u32
+pub WM_SYSKEYDOWN    = 0x0104_u32
+pub WM_MOUSEMOVE     = 0x0200_u32
+pub WM_LBUTTONDOWN   = 0x0201_u32
+pub WM_LBUTTONUP     = 0x0202_u32
+pub WM_RBUTTONDOWN   = 0x0204_u32
+pub WM_RBUTTONUP     = 0x0205_u32
+pub WM_MBUTTONDOWN   = 0x0207_u32
+pub WM_MBUTTONUP     = 0x0208_u32
+pub WM_MOUSEWHEEL    = 0x020A_u32
+pub WM_DPICHANGED    = 0x02E0_u32
+
+pub VK_BACK    = 0x08_u64
+pub VK_TAB     = 0x09_u64
+pub VK_RETURN  = 0x0D_u64
+pub VK_SHIFT   = 0x10
+pub VK_CONTROL = 0x11
+pub VK_MENU    = 0x12
+pub VK_ESCAPE  = 0x1B_u64
+pub VK_SPACE   = 0x20_u64
+pub VK_END     = 0x23_u64
+pub VK_HOME    = 0x24_u64
+pub VK_LEFT    = 0x25_u64
+pub VK_RIGHT   = 0x27_u64
+pub VK_DELETE  = 0x2E_u64
+pub VK_C       = 0x43_u64
+pub VK_V       = 0x56_u64
+
+pub GWLP_USERDATA       = -21
+pub WS_OVERLAPPEDWINDOW = 0x00CF0000_u32
+pub CW_USEDEFAULT       = -2147483648
+pub SW_SHOWNORMAL       = 1
+pub SWP_NOMOVE          = 0x0002_u32
+pub SWP_NOZORDER        = 0x0004_u32
+pub SWP_NOACTIVATE      = 0x0010_u32
+pub SIZE_MINIMIZED      = 1_u64
+pub IDC_ARROW           = 32512_u64
+pub PM_REMOVE           = 1_u32
+pub QS_ALLINPUT         = 0x04FF_u32
+pub MWMO_INPUTAVAILABLE = 4_u32
+pub WAIT_TIMEOUT        = 0x102_u32
+pub INFINITE            = 0xFFFFFFFF_u32
+pub CF_UNICODETEXT      = 13_u32
+pub GMEM_MOVEABLE       = 2_u32
+pub ERROR_CLASS_ALREADY_EXISTS = 1410
+pub DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4_i64
+pub IACE_DEFAULT        = 0x0010_u32
+
+pub D2DERR_RECREATE_TARGET = -2003238900 # 0x8899000C
+
+# Crystal's Proc.new(pointer, closure) is library code iyi lacks: a Proc is
+# {function, closure}, and with a nil closure proc_call is a plain C call.
+pub def com(type : P.class, fn : Void*) : P forall P
+  pair = {fn, Pointer(Void).new(0_u64)}
+  pointerof(pair).as(P*).value
+end
+
+# Method `n` of a COM object's vtable.
+pub def slot(obj : Void*, n : Int32) : Void*
+  obj.as(Void***).value[n]
+end
+
+# IUnknown::Release; a null object is fine.
+pub def release(obj : Void*) : Nil
+  return if obj.address == 0
+  com(Proc(Void*, UInt32), slot(obj, 2)).call(obj)
+end
+
+pub def null : Void*
+  Pointer(Void).new(0_u64)
+end
+
+pub def guid(d1 : UInt32, d2 : UInt16, d3 : UInt16, d4 : StaticArray(UInt8, 8)) : LibD2D::Guid
+  g = LibD2D::Guid.new
+  g.d1 = d1
+  g.d2 = d2
+  g.d3 = d3
+  g.d4 = d4
+  g
+end
+
+# A D2D1_POINT_2F passed by value: two floats in one 64-bit register. Packed by
+# hand because a Proc call does not lower structs the way a `fun` does.
+pub def point(x : Float32, y : Float32) : UInt64
+  pair = StaticArray(Float32, 2).new(0_f32)
+  pair[0] = x
+  pair[1] = y
+  pointerof(pair).as(UInt64*).value
+end
+
+# NUL-terminated UTF-16 for the W functions.
+pub def wide(s : String) : Array(UInt16)
+  a = [] of UInt16
+  s.each_char do |c|
+    cp = c.ord
+    if cp >= 0x10000
+      cp -= 0x10000
+      a << (0xD800 + (cp >> 10)).to_u16
+      a << (0xDC00 + (cp & 0x3FF)).to_u16
+    else
+      a << cp.to_u16
+    end
+  end
+  a << 0_u16
+  a
+end
+
+# UTF-16 -> String; stops at `n` units or a NUL, whichever comes first
+# (n < 0: NUL only). An unpaired surrogate becomes U+FFFD.
+pub def from_wide(p : UInt16*, n : Int32 = -1) : String
+  String.build do |b|
+    i = 0
+    while n < 0 || i < n
+      u = p[i].to_i32
+      break if u == 0
+      i += 1
+      if u >= 0xD800 && u <= 0xDBFF
+        lo = (n < 0 || i < n) ? p[i].to_i32 : 0
+        if lo >= 0xDC00 && lo <= 0xDFFF
+          i += 1
+          b << (0x10000 + ((u - 0xD800) << 10) + (lo - 0xDC00)).chr
+        else
+          b << '\u{FFFD}'
+        end
+      elsif u >= 0xDC00 && u <= 0xDFFF
+        b << '\u{FFFD}'
+      else
+        b << u.chr
+      end
+    end
+  end
+end
+
+# The low and high 16 bits of an lParam as signed ints (GET_X_LPARAM / GET_Y_LPARAM).
+pub def lo16(v : Int64) : Int32
+  x = (v & 0xFFFF_i64).to_i32
+  x >= 0x8000 ? x - 0x10000 : x
+end
+
+pub def hi16(v : Int64) : Int32
+  lo16(v >> 16)
+end
+
+# Writes 32-bit top-down BGRA pixels as a BMP (opaque).
+pub def save_bmp(path : String, px : UInt32*, w : Int32, h : Int32) : Nil
+  n = w * h
+  n.times { |i| px[i] = px[i] | 0xFF000000_u32 }
+  data = n * 4
+  hdr = Pointer(UInt8).malloc(54_u64)
+  put = ->(off : Int32, v : UInt32, len : Int32) do
+    len.times { |i| hdr[off + i] = ((v >> (8 * i)) & 0xFF_u32).to_u8 }
+    nil
+  end
+  hdr[0] = 'B'.ord.to_u8
+  hdr[1] = 'M'.ord.to_u8
+  put.call(2, (54 + data).to_u32, 4)
+  put.call(10, 54_u32, 4)
+  put.call(14, 40_u32, 4)
+  put.call(18, w.to_u32, 4)
+  put.call(22, (-h).unsafe_to_u32, 4)
+  put.call(26, 1_u32, 2)
+  put.call(28, 32_u32, 2)
+  put.call(34, data.to_u32, 4)
+  File.open(path, "wb") do |io|
+    io.write(hdr, 54)
+    io.write(px.as(UInt8*), data)
+  end
+end

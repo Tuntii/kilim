@@ -1,0 +1,405 @@
+# Direct2D + DirectWrite implementation of Canvas. The render target's DPI is
+# 96 * density, so Direct2D takes kilim's logical units (DIPs) directly and
+# scales to pixels itself; DirectWrite lays text out in DIPs too, so sizes do not
+# change with the display scale and need no re-measure.
+
+module kilim/d2d_canvas
+
+import std/float
+import std/int
+import std/static_array
+import kilim/win32::*
+import kilim/geom::{Rect, Size}
+import kilim/canvas::{Canvas, Color}
+import kilim/theme::*
+
+# The same embedded font as SdlCanvas (Noto Sans Regular, OFL: assets/fonts/OFL.txt),
+# so both backends look alike. Characters it lacks (emoji, CJK) come from
+# DirectWrite's system fallback.
+FONT_DATA     = {{ read_file("#{__DIR__}/../assets/fonts/NotoSans-Regular.ttf") }}
+FONT_FAMILY   = "Noto Sans"
+# Without IDWriteFactory5 (Windows 10 before 1703) the font cannot be loaded from memory.
+SYSTEM_FAMILY = "Segoe UI"
+
+# A laid-out string, reused until evicted (layouts do not depend on colour or target).
+struct TextLayout
+  getter layout : Void*
+  getter size : Size
+
+  def initialize(@layout : Void*, @size : Size)
+  end
+end
+
+# shortcut: cleared whole when full (no LRU), as in SdlCanvas.
+LAYOUT_CACHE_MAX = 1024
+
+# D2D1_ANTIALIAS_MODE_ALIASED: crisp pixel edges, same look as SDL_Renderer.
+ALIASED = 1_u32
+
+pub class D2dCanvas < Canvas
+  getter density : Float32
+  # The family text is drawn in: FONT_FAMILY, or SYSTEM_FAMILY if it could not be loaded.
+  getter font_family : String
+
+  def initialize
+    @density = 1_f32
+    @factory = null
+    @dwrite = null
+    @font_loader = null
+    @fonts = null
+    @font_family = SYSTEM_FAMILY
+    @format = null
+    @hwnd_target = null
+    @hwnd_brush = null
+    @target = null
+    @brush = null
+    @w = 0_f32
+    @h = 0_f32
+    @line_h = 0_f32
+    @clips = [] of Rect
+    @layouts = {} of String => TextLayout
+    iid = guid(0x06152247_u32, 0x6f50_u16, 0x465a_u16, StaticArray[0x92_u8, 0x45_u8, 0x11_u8, 0x8b_u8, 0xfd_u8, 0x3b_u8, 0x60_u8, 0x07_u8])
+    hr_fatal(LibD2D.D2D1CreateFactory(0_u32, pointerof(iid), null, pointerof(@factory)), "D2D1CreateFactory")
+    # IDWriteFactory5 if there is one (its vtable starts with IDWriteFactory's), else IDWriteFactory.
+    iid = guid(0x958db99a_u32, 0xbe2a_u16, 0x4f09_u16, StaticArray[0xaf_u8, 0x7d_u8, 0x65_u8, 0x18_u8, 0x98_u8, 0x03_u8, 0xd1_u8, 0xd3_u8])
+    if LibDWrite.DWriteCreateFactory(0_u32, pointerof(iid), pointerof(@dwrite)) >= 0
+      load_font
+    else
+      iid = guid(0xb859ee5a_u32, 0xd838_u16, 0x4b5b_u16, StaticArray[0xa2_u8, 0xe8_u8, 0x1a_u8, 0xdc_u8, 0x7d_u8, 0x93_u8, 0xdb_u8, 0x48_u8])
+      hr_fatal(LibDWrite.DWriteCreateFactory(0_u32, pointerof(iid), pointerof(@dwrite)), "DWriteCreateFactory")
+    end
+    family = wide(@font_family)
+    locale = wide("en-us")
+    # IDWriteFactory::CreateTextFormat(family, collection, weight, style, stretch, size, locale, out)
+    create = com(Proc(Void*, UInt16*, Void*, UInt32, UInt32, UInt32, Float32, UInt16*, Void**, Int32), slot(@dwrite, 15))
+    hr_fatal(create.call(@dwrite, family.to_unsafe, @fonts, 400_u32, 0_u32, 5_u32, FONT_SIZE, locale.to_unsafe, pointerof(@format)), "CreateTextFormat")
+    # IDWriteTextFormat::SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP)
+    com(Proc(Void*, UInt32, Int32), slot(@format, 5)).call(@format, 1_u32)
+    @line_h = layout(" ").size.h
+  end
+
+  # FONT_DATA as a one-font collection in @fonts. On any failure @fonts stays null
+  # and text uses SYSTEM_FAMILY from the system collection.
+  def load_font : Nil
+    # IDWriteFactory5::CreateInMemoryFontFileLoader, IDWriteFactory::RegisterFontFileLoader
+    return if com(Proc(Void*, Void**, Int32), slot(@dwrite, 44)).call(@dwrite, pointerof(@font_loader)) < 0
+    if com(Proc(Void*, Void*, Int32), slot(@dwrite, 13)).call(@dwrite, @font_loader) < 0
+      release(@font_loader)
+      @font_loader = null
+      return
+    end
+    file = builder = set = coll = null
+    # IDWriteInMemoryFontFileLoader::CreateInMemoryFontFileReference(factory, data, size, owner, out);
+    # a null owner makes the loader keep its own copy of the data.
+    ok = com(Proc(Void*, Void*, Void*, UInt32, Void*, Void**, Int32), slot(@font_loader, 4)).call(@font_loader, @dwrite, FONT_DATA.to_unsafe.as(Void*), FONT_DATA.bytesize.to_u32, null, pointerof(file)) >= 0
+    # IDWriteFactory5::CreateFontSetBuilder, IDWriteFontSetBuilder1::AddFontFile, ::CreateFontSet
+    ok = ok && com(Proc(Void*, Void**, Int32), slot(@dwrite, 43)).call(@dwrite, pointerof(builder)) >= 0
+    ok = ok && com(Proc(Void*, Void*, Int32), slot(builder, 7)).call(builder, file) >= 0
+    ok = ok && com(Proc(Void*, Void**, Int32), slot(builder, 6)).call(builder, pointerof(set)) >= 0
+    # IDWriteFactory3::CreateFontCollectionFromFontSet
+    ok = ok && com(Proc(Void*, Void*, Void**, Int32), slot(@dwrite, 37)).call(@dwrite, set, pointerof(coll)) >= 0
+    if ok
+      # IDWriteFontCollection::FindFamilyName: the file must really be that family.
+      name = wide(FONT_FAMILY)
+      index = 0_u32
+      exists = 0
+      com(Proc(Void*, UInt16*, UInt32*, Int32*, Int32), slot(coll, 5)).call(coll, name.to_unsafe, pointerof(index), pointerof(exists))
+      ok = exists != 0
+    end
+    release(file)
+    release(builder)
+    release(set)
+    if ok
+      @fonts = coll
+      @font_family = FONT_FAMILY
+    else
+      release(coll)
+    end
+  end
+
+  pub def attached? : Bool
+    @hwnd_target.address != 0
+  end
+
+  # Creates the window's render target; again after the device was lost.
+  pub def attach(hwnd : Void*, pw : Int32, ph : Int32) : Nil
+    props = target_props(0_u32, 0_u32)
+    hp = LibD2D::HwndProps.new
+    hp.hwnd = hwnd
+    hp.width = pw.to_u32
+    hp.height = ph.to_u32
+    # D2D1_PRESENT_OPTIONS_IMMEDIATELY: no vsync wait, like SDL_Renderer's default.
+    hp.present = 2_u32
+    # ID2D1Factory::CreateHwndRenderTarget
+    create = com(Proc(Void*, LibD2D::RenderTargetProps*, LibD2D::HwndProps*, Void**, Int32), slot(@factory, 14))
+    hr_fatal(create.call(@factory, pointerof(props), pointerof(hp), pointerof(@hwnd_target)), "CreateHwndRenderTarget")
+    @hwnd_brush = new_brush(@hwnd_target)
+    @target = @hwnd_target
+    @brush = @hwnd_brush
+  end
+
+  # Physical pixel size of the window's client area.
+  pub def resize(pw : Int32, ph : Int32) : Nil
+    @w = pw / @density
+    @h = ph / @density
+    return unless attached?
+    s = LibD2D::SizeU.new
+    s.width = pw.to_u32
+    s.height = ph.to_u32
+    # ID2D1HwndRenderTarget::Resize
+    com(Proc(Void*, LibD2D::SizeU*, Int32), slot(@hwnd_target, 58)).call(@hwnd_target, pointerof(s))
+  end
+
+  # When the window moves to a display with a different scale.
+  pub def set_density(d : Float32) : Nil
+    return if d == @density
+    @density = d
+    return unless attached?
+    # ID2D1RenderTarget::SetDpi
+    com(Proc(Void*, Float32, Float32, Nil), slot(@hwnd_target, 51)).call(@hwnd_target, 96_f32 * d, 96_f32 * d)
+  end
+
+  pub def begin_frame : Nil
+    @clips.clear
+    # ID2D1RenderTarget::BeginDraw
+    com(Proc(Void*, Nil), slot(@target, 48)).call(@target)
+  end
+
+  # False when the device was lost: the window target must be recreated (`attach`).
+  pub def end_frame : Bool
+    until @clips.empty?
+      pop_clip
+    end
+    t1 = t2 = 0_u64
+    # ID2D1RenderTarget::EndDraw
+    hr = com(Proc(Void*, UInt64*, UInt64*, Int32), slot(@target, 49)).call(@target, pointerof(t1), pointerof(t2))
+    if hr == D2DERR_RECREATE_TARGET && @target == @hwnd_target
+      drop_target
+      return false
+    end
+    hr_fatal(hr, "EndDraw")
+    true
+  end
+
+  # Draws what the block draws into a memory bitmap of pw x ph pixels and saves it as
+  # a BMP. The window's target cannot be read back, so a DC render target is used.
+  pub def capture(path : String, pw : Int32, ph : Int32, & : -> Nil) : Nil
+    screen = LibWin.GetDC(null)
+    mem = LibWin.CreateCompatibleDC(screen)
+    LibWin.ReleaseDC(null, screen)
+    bmi = LibWin::BitmapInfoHeader.new
+    bmi.size = 40_u32
+    bmi.width = pw
+    bmi.height = -ph
+    bmi.planes = 1_u16
+    bmi.bit_count = 32_u16
+    bits = null
+    dib = LibWin.CreateDIBSection(mem, pointerof(bmi), 0_u32, pointerof(bits), null, 0_u32)
+    win_fatal("CreateDIBSection") if dib.address == 0
+    old = LibWin.SelectObject(mem, dib)
+    # DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE
+    props = target_props(87_u32, 3_u32)
+    dc_target = null
+    # ID2D1Factory::CreateDCRenderTarget
+    create = com(Proc(Void*, LibD2D::RenderTargetProps*, Void**, Int32), slot(@factory, 16))
+    hr_fatal(create.call(@factory, pointerof(props), pointerof(dc_target)), "CreateDCRenderTarget")
+    r = LibWin::RectI.new
+    r.right = pw
+    r.bottom = ph
+    # ID2D1DCRenderTarget::BindDC
+    hr_fatal(com(Proc(Void*, Void*, LibWin::RectI*, Int32), slot(dc_target, 57)).call(dc_target, mem, pointerof(r)), "BindDC")
+    @target = dc_target
+    @brush = new_brush(dc_target)
+    begin_frame
+    yield
+    end_frame
+    save_bmp(path, bits.as(UInt32*), pw, ph)
+    release(@brush)
+    release(dc_target)
+    @target = @hwnd_target
+    @brush = @hwnd_brush
+    LibWin.SelectObject(mem, old)
+    LibWin.DeleteObject(dib)
+    LibWin.DeleteDC(mem)
+  end
+
+  pub def fill_rect(r : Rect, c : Color) : Nil
+    color(c)
+    rf = rectf(r.x, r.y, r.x + r.w, r.y + r.h)
+    # ID2D1RenderTarget::FillRectangle
+    com(Proc(Void*, LibD2D::RectF*, Void*, Nil), slot(@target, 17)).call(@target, pointerof(rf), @brush)
+  end
+
+  # One device pixel wide, inside r (as SDL_RenderRect draws it).
+  pub def stroke_rect(r : Rect, c : Color) : Nil
+    color(c)
+    px = 1_f32 / @density
+    half = px / 2
+    rf = rectf(r.x + half, r.y + half, r.x + r.w - half, r.y + r.h - half)
+    # ID2D1RenderTarget::DrawRectangle
+    com(Proc(Void*, LibD2D::RectF*, Void*, Float32, Void*, Nil), slot(@target, 16)).call(@target, pointerof(rf), @brush, px, null)
+  end
+
+  # One device pixel wide, through the centres of the pixels it names.
+  pub def line(x1 : Float32, y1 : Float32, x2 : Float32, y2 : Float32, c : Color) : Nil
+    color(c)
+    px = 1_f32 / @density
+    half = px / 2
+    # ID2D1RenderTarget::DrawLine
+    com(Proc(Void*, UInt64, UInt64, Void*, Float32, Void*, Nil), slot(@target, 15)).call(@target, point(x1 + half, y1 + half), point(x2 + half, y2 + half), @brush, px, null)
+  end
+
+  pub def text(x : Float32, y : Float32, s : String, c : Color) : Nil
+    return if s.empty?
+    color(c)
+    t = layout(s)
+    # Snapped to whole pixels so glyphs are not shifted by a fraction.
+    ox = (x * @density).round / @density
+    oy = (y * @density).round / @density
+    # ID2D1RenderTarget::DrawTextLayout
+    com(Proc(Void*, UInt64, Void*, Void*, UInt32, Nil), slot(@target, 28)).call(@target, point(ox, oy), t.layout, @brush, 0_u32)
+  end
+
+  pub def measure(s : String) : Size
+    layout(s).size
+  end
+
+  pub def line_height : Float32
+    @line_h
+  end
+
+  pub def push_clip(r : Rect) : Nil
+    c = @clips.empty? ? r : @clips.last.intersect(r)
+    @clips << c
+    d = @density
+    # Rounded outward: a half pixel at the edge must not be clipped.
+    rf = rectf((c.x * d).floor / d, (c.y * d).floor / d, ((c.x + c.w) * d).ceil / d, ((c.y + c.h) * d).ceil / d)
+    # ID2D1RenderTarget::PushAxisAlignedClip
+    com(Proc(Void*, LibD2D::RectF*, UInt32, Nil), slot(@target, 45)).call(@target, pointerof(rf), ALIASED)
+  end
+
+  pub def pop_clip : Nil
+    return if @clips.empty?
+    @clips.pop
+    # ID2D1RenderTarget::PopAxisAlignedClip
+    com(Proc(Void*, Nil), slot(@target, 46)).call(@target)
+  end
+
+  pub def visible?(r : Rect) : Bool
+    return r.overlaps?(@clips.last) unless @clips.empty?
+    r.overlaps?(Rect.new(0_f32, 0_f32, @w, @h))
+  end
+
+  pub def close : Nil
+    @layouts.each_value { |t| release(t.layout) }
+    @layouts.clear
+    drop_target
+    release(@format)
+    release(@fonts)
+    unless @font_loader.address == 0
+      # IDWriteFactory::UnregisterFontFileLoader
+      com(Proc(Void*, Void*, Int32), slot(@dwrite, 14)).call(@dwrite, @font_loader)
+      release(@font_loader)
+    end
+    release(@dwrite)
+    release(@factory)
+    @format = @fonts = @font_loader = @dwrite = @factory = null
+  end
+
+  def drop_target : Nil
+    release(@hwnd_brush)
+    release(@hwnd_target)
+    @hwnd_brush = @hwnd_target = null
+    @brush = @target = null
+  end
+
+  def layout(s : String) : TextLayout
+    if t = @layouts[s]?
+      return t
+    end
+    if @layouts.size >= LAYOUT_CACHE_MAX
+      @layouts.each_value { |o| release(o.layout) }
+      @layouts.clear
+    end
+    ws = wide(s)
+    tl = null
+    # IDWriteFactory::CreateTextLayout(text, length, format, max_w, max_h, out)
+    create = com(Proc(Void*, UInt16*, UInt32, Void*, Float32, Float32, Void**, Int32), slot(@dwrite, 18))
+    hr_fatal(create.call(@dwrite, ws.to_unsafe, (ws.size - 1).to_u32, @format, 100000_f32, 100000_f32, pointerof(tl)), "CreateTextLayout")
+    m = LibDWrite::TextMetrics.new
+    # IDWriteTextLayout::GetMetrics
+    com(Proc(Void*, LibDWrite::TextMetrics*, Int32), slot(tl, 60)).call(tl, pointerof(m))
+    # Trailing spaces count, as they do in SDL_ttf (the caret sits after them).
+    t = TextLayout.new(tl, Size.new(m.width_trailing, m.height))
+    @layouts[s] = t
+    t
+  end
+
+  def new_brush(target : Void*) : Void*
+    # D2D1_ANTIALIAS_MODE_ALIASED for shapes; text keeps its own (ClearType/grayscale).
+    com(Proc(Void*, UInt32, Nil), slot(target, 32)).call(target, ALIASED)
+    c = LibD2D::ColorF.new
+    c.a = 1_f32
+    brush = null
+    # ID2D1RenderTarget::CreateSolidColorBrush
+    create = com(Proc(Void*, LibD2D::ColorF*, Void*, Void**, Int32), slot(target, 8))
+    hr_fatal(create.call(target, pointerof(c), null, pointerof(brush)), "CreateSolidColorBrush")
+    brush
+  end
+
+  def target_props(format : UInt32, alpha : UInt32) : LibD2D::RenderTargetProps
+    p = LibD2D::RenderTargetProps.new
+    p.format = format
+    p.alpha_mode = alpha
+    p.dpi_x = 96_f32 * @density
+    p.dpi_y = 96_f32 * @density
+    p
+  end
+
+  def color(c : Color) : Nil
+    cf = LibD2D::ColorF.new
+    cf.r = c.r / 255_f32
+    cf.g = c.g / 255_f32
+    cf.b = c.b / 255_f32
+    cf.a = c.a / 255_f32
+    # ID2D1SolidColorBrush::SetColor
+    com(Proc(Void*, LibD2D::ColorF*, Nil), slot(@brush, 8)).call(@brush, pointerof(cf))
+  end
+
+  def rectf(l : Float32, t : Float32, r : Float32, b : Float32) : LibD2D::RectF
+    x = LibD2D::RectF.new
+    x.left = l
+    x.top = t
+    x.right = r
+    x.bottom = b
+    x
+  end
+
+  @factory : Void*
+  @dwrite : Void*
+  @font_loader : Void*
+  @fonts : Void*
+  @format : Void*
+  @hwnd_target : Void*
+  @hwnd_brush : Void*
+  @target : Void*
+  @brush : Void*
+  @w : Float32
+  @h : Float32
+  @line_h : Float32
+  @clips : Array(Rect)
+  @layouts : Hash(String, TextLayout)
+end
+
+# shortcut: iyi has no rescue; a failed COM call at this level means the platform is
+# unusable, so the program exits with the HRESULT (as sdl_fatal does for SDL).
+pub def hr_fatal(hr : Int32, why : String) : Nil
+  return if hr >= 0
+  STDERR.puts "kilim: #{why}: HRESULT 0x#{hr.unsafe_to_u32.to_s(16)}"
+  exit 1
+end
+
+pub def win_fatal(why : String) : NoReturn
+  STDERR.puts "kilim: #{why}: error #{LibWin.GetLastError}"
+  exit 1
+end
