@@ -173,7 +173,8 @@ pub class D2dCanvas < Canvas
     t1 = t2 = 0_u64
     # ID2D1RenderTarget::EndDraw
     hr = com(Proc(Void*, UInt64*, UInt64*, Int32), slot(@target, 49)).call(@target, pointerof(t1), pointerof(t2))
-    if hr == D2DERR_RECREATE_TARGET && @target == @hwnd_target
+    # Compare addresses: `==` on two Void* is not pointer equality in iyi.
+    if hr == D2DERR_RECREATE_TARGET && @target.address == @hwnd_target.address
       drop_target
       return false
     end
