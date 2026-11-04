@@ -1,0 +1,25 @@
+# UTF-16 and lParam helpers of the Windows backend; pure functions, run on every platform.
+
+module test/win32_test
+
+import kilim/win32::{wide, from_wide, lo16, hi16}
+import kilim/testing::*
+
+def main : Int32
+  w = wide("aş😀")
+  expect_eq w, [0x61_u16, 0x15F_u16, 0xD83D_u16, 0xDE00_u16, 0_u16], "wide: BMP, surrogate pair, NUL"
+  expect_eq from_wide(w.to_unsafe), "aş😀", "from_wide round trip to NUL"
+  expect_eq from_wide(w.to_unsafe, 2), "aş", "from_wide stops at n"
+  expect_eq from_wide(w.to_unsafe, 3), "aş\u{FFFD}", "pair cut by n -> U+FFFD"
+  lone = [0xDE00_u16, 0x62_u16, 0_u16]
+  expect_eq from_wide(lone.to_unsafe), "\u{FFFD}b", "lone low surrogate -> U+FFFD"
+  expect_eq wide(""), [0_u16], "empty string is just NUL"
+  # x = -5, y = 300 packed as a WM_ lParam.
+  lp = ((300_i64 << 16) | 0xFFFB_i64)
+  expect_eq lo16(lp), -5, "lo16 sign-extends"
+  expect_eq hi16(lp), 300, "hi16"
+  puts "win32 ok"
+  0
+end
+
+exit main

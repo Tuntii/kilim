@@ -2,6 +2,7 @@
 # injects Tab + Space, exercises the live resize path (event watch),
 # saves smoke.bmp and ends the run loop with QUIT. On success it prints
 # `smoke ok` and exits 0; otherwise it prints the reason and exits 1.
+# On Windows build it with -Dsdl (the native backend has examples/smoke_win32.iyi).
 
 module examples/smoke
 

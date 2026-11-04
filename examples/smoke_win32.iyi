@@ -1,0 +1,132 @@
+# End-to-end check of the native Windows backend (the SDL one is smoke.iyi, built
+# with -Dsdl): opens a window, posts real Win32 messages (click, Enter, typed text
+# with a surrogate pair), checks the embedded font and the IME switch, round-trips
+# the clipboard (and puts back the text it held), exercises the live resize path
+# (WM_SIZE redraws from the window procedure) and a move to a 150 % display
+# (WM_DPICHANGED), saves smoke_win32.bmp at that scale and ends the run loop with
+# WM_CLOSE. Prints `smoke ok` and exits 0, or the reason and 1.
+
+module examples/smoke_win32
+
+import std/float
+import std/int
+import kilim/win32::*
+import kilim/event::*
+import kilim/widget::{Widget}
+import kilim/box::*
+import kilim/label::{Label}
+import kilim/button::{Button}
+import kilim/textbox::{Textbox}
+import kilim/window::{Window}
+
+PAD = 12_f32
+
+class Counter
+  property n = 0
+end
+
+def fail(why : String) : NoReturn
+  puts "smoke FAIL: #{why}"
+  exit 1
+end
+
+def post(win : Window, msg : UInt32, wp : UInt64, lp : Int64) : Nil
+  fail("PostMessageW") if LibWin.PostMessageW(win.handle, msg, wp, lp) == 0
+end
+
+# Does the window have an IME context right now?
+def ime?(win : Window) : Bool
+  c = LibImm.ImmGetContext(win.handle)
+  return false if c.address == 0
+  LibImm.ImmReleaseContext(win.handle, c)
+  true
+end
+
+# lParam of a mouse message: client pixels, y in the high word.
+def at(win : Window, x : Float32, y : Float32) : Int64
+  d = win.density
+  ((y * d).round.to_i64 << 16) | (x * d).round.to_i64
+end
+
+def main : Int32
+  n = Counter.new
+  button = Button.new("OK", -> { n.n += 1; nil })
+  input = Textbox.new
+  root = Box.new(Axis::Column, [Label.new("Merhaba şöğüt"), button, input] of Widget, padding: PAD, spacing: 8_f32)
+  win = Window.new("smoke", 320, 200, root)
+  win.step
+  canvas = win.canvas
+  fail("text is drawn in #{canvas.font_family}, expected the embedded Noto Sans") unless canvas.font_family == "Noto Sans"
+
+  win.inject KeyDown.new(Key::Tab, Mods.new)
+  fail("Tab did not focus the button") unless button.focused
+  fail("IME is on while a button is focused") if ime?(win)
+  win.inject KeyDown.new(Key::Space, Mods.new)
+  fail("counter after Space is #{n.n}, expected 1") unless n.n == 1
+  win.step
+
+  # Message translation: real messages posted to the queue must reach the button too.
+  cx = button.bounds.x + button.bounds.w / 2
+  cy = button.bounds.y + button.bounds.h / 2
+  post(win, WM_LBUTTONDOWN, 1_u64, at(win, cx, cy))
+  post(win, WM_LBUTTONUP, 0_u64, at(win, cx, cy))
+  post(win, WM_KEYDOWN, VK_RETURN, 1_i64)
+  win.step
+  fail("counter after click + Enter is #{n.n}, expected 3") unless n.n == 3
+
+  # Typed text: a BMP letter, a surrogate pair in two messages, a control character
+  # (Ctrl+C arrives as 0x03) that must not be typed, and ASCII.
+  win.inject KeyDown.new(Key::Tab, Mods.new)
+  fail("second Tab did not focus the textbox") unless input.focused
+  win.step
+  # A machine without IMM support never has a context; then there is nothing to switch.
+  puts "ime: #{ime?(win) ? "on in the textbox" : "not available"}"
+  [0x15F_u64, 0xD83D_u64, 0xDE00_u64, 0x03_u64, 0x41_u64].each { |u| post(win, WM_CHAR, u, 1_i64) }
+  win.step
+  fail("typed text is #{input.text.inspect}, expected \"ş😀A\"") unless input.text == "ş😀A"
+
+  saved = win.ui.clipboard.get
+  clip = "Merhaba şöğüt 😀"
+  win.ui.clipboard.set(clip)
+  got = win.ui.clipboard.get
+  win.ui.clipboard.set(saved) unless saved.empty?
+  fail("clipboard round trip gave #{got.inspect}") unless got == clip
+
+  # Live resize: SetWindowPos sends WM_SIZE synchronously, and the window procedure
+  # must lay out and draw before the loop runs. The button fills the client width.
+  LibWin.SetWindowPos(win.handle, null, 0, 0, 480, 300, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE)
+  r = LibWin::RectI.new
+  LibWin.GetClientRect(win.handle, pointerof(r))
+  d = win.density
+  expected = r.right / d - 2 * PAD
+  fail("button width after resize is #{button.bounds.w}, expected #{expected} (client #{r.right}x#{r.bottom} px)") unless (button.bounds.w - expected).abs < 0.01_f32
+  puts "resize: #{r.right}x#{r.bottom} px, density #{d}"
+
+  # Moving to a 150 % display: Windows sends WM_DPICHANGED with the new DPI and a
+  # suggested window rectangle. Text sizes are in DIPs and must not change; the
+  # layout fills the new client area in logical units.
+  text_w = canvas.measure("Merhaba şöğüt").w
+  suggested = LibWin::RectI.new
+  suggested.left = 100
+  suggested.top = 100
+  suggested.right = 100 + 720
+  suggested.bottom = 100 + 450
+  LibWin.SendMessageW(win.handle, WM_DPICHANGED, (144_u64 << 16) | 144_u64, pointerof(suggested).address.unsafe_to_i64)
+  fail("density after WM_DPICHANGED is #{win.density}, expected 1.5") unless win.density == 1.5_f32
+  LibWin.GetClientRect(win.handle, pointerof(r))
+  expected = r.right / 1.5_f32 - 2 * PAD
+  fail("button width at 150 % is #{button.bounds.w}, expected #{expected} (client #{r.right} px)") unless (button.bounds.w - expected).abs < 0.01_f32
+  fail("text width changed with the scale: #{text_w} -> #{canvas.measure("Merhaba şöğüt").w}") unless canvas.measure("Merhaba şöğüt").w == text_w
+  puts "dpi 150 %: #{r.right}x#{r.bottom} px"
+
+  win.step
+  win.screenshot("smoke_win32.bmp")
+
+  # run's loop must end on WM_CLOSE (and close the window).
+  post(win, WM_CLOSE, 0_u64, 0_i64)
+  win.run
+  puts "smoke ok"
+  0
+end
+
+exit main

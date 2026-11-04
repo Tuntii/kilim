@@ -1,0 +1,350 @@
+# Native Windows window and event loop. Win32 messages become kilim events and go
+# to Ui; if Ui needs a frame, D2dCanvas draws and presents it.
+
+module kilim/win_window
+
+import std/float
+import std/int
+import std/box::{Box}
+import kilim/win32::*
+import kilim/d2d_canvas::{D2dCanvas, win_fatal}
+import kilim/clipboard::{Clipboard}
+import kilim/event::*
+import kilim/widget::{Widget}
+import kilim/ui::{Ui}
+import kilim/theme::*
+
+CLASS_NAME = wide("kilim")
+
+# Ctrl+Alt together is AltGr on Windows (Polish AltGr+C = ć): not a shortcut.
+def primary_down? : Bool
+  LibWin.GetKeyState(VK_CONTROL) < 0 && LibWin.GetKeyState(VK_MENU) >= 0
+end
+
+pub class WinWindow
+  getter ui : Ui
+  # Raw HWND; for Win32 calls kilim does not bind.
+  getter handle : Void*
+  getter canvas : D2dCanvas
+
+  def initialize(title : String, width : Int32, height : Int32, root : Widget)
+    # Fails harmlessly when the process (or its manifest) already chose.
+    LibWin.SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
+    @canvas = D2dCanvas.new
+    @clipboard = WinClipboard.new
+    @ui = Ui.new(root, @canvas, @clipboard)
+    @handle = null
+    @msg = LibWin::Msg.new
+    @quit = false
+    @closed = false
+    @text_input = false
+    @high_surrogate = 0_u16
+    # Every ivar must be filled before handing out self. The box lives in this ivar:
+    # the window's only other copy is GWLP_USERDATA, invisible to the GC.
+    @box = null
+    @box = Box.box(self)
+    inst = LibWin.GetModuleHandleW(Pointer(UInt16).new(0_u64))
+    wc = LibWin::WndClassExW.new
+    wc.cb_size = sizeof(LibWin::WndClassExW).to_u32
+    # The window procedure: kilim's C -> iyi entry point. Not a closure; the window
+    # is found through GWLP_USERDATA, set from CreateWindowExW's parameter.
+    wc.wnd_proc = ->(hwnd : Void*, msg : UInt32, wp : UInt64, lp : Int64) do
+      if msg == WM_NCCREATE
+        # CREATESTRUCTW.lpCreateParams is its first field.
+        data = Pointer(Void*).new(lp.unsafe_to_u64).value
+        LibWin.SetWindowLongPtrW(hwnd, GWLP_USERDATA, data.address.unsafe_to_i64)
+      end
+      ud = LibWin.GetWindowLongPtrW(hwnd, GWLP_USERDATA)
+      if ud == 0
+        LibWin.DefWindowProcW(hwnd, msg, wp, lp)
+      else
+        Box(WinWindow).unbox(Pointer(Void).new(ud.unsafe_to_u64)).message(hwnd, msg, wp, lp)
+      end
+    end
+    wc.instance = inst
+    wc.cursor = LibWin.LoadCursorW(null, IDC_ARROW)
+    wc.class_name = CLASS_NAME.to_unsafe
+    if LibWin.RegisterClassExW(pointerof(wc)) == 0 && LibWin.GetLastError != ERROR_CLASS_ALREADY_EXISTS
+      win_fatal("RegisterClassExW")
+    end
+    t = wide(title)
+    @handle = LibWin.CreateWindowExW(0_u32, CLASS_NAME.to_unsafe, t.to_unsafe, WS_OVERLAPPEDWINDOW,
+      CW_USEDEFAULT, CW_USEDEFAULT, width, height, null, null, inst, @box)
+    win_fatal("CreateWindowExW") if @handle.address == 0
+    @clipboard.hwnd = @handle
+    # No text field is focused yet: the IME stays off until one is (sync_text_input).
+    LibImm.ImmAssociateContextEx(@handle, null, 0_u32)
+    # width x height is the client area in logical units: scale it, add the frame.
+    dpi = LibWin.GetDpiForWindow(@handle)
+    d = dpi / 96_f32
+    r = LibWin::RectI.new
+    r.right = (width * d).round.to_i
+    r.bottom = (height * d).round.to_i
+    LibWin.AdjustWindowRectExForDpi(pointerof(r), WS_OVERLAPPEDWINDOW, 0, 0_u32, dpi)
+    @canvas.set_density(d)
+    LibWin.SetWindowPos(@handle, null, 0, 0, r.right - r.left, r.bottom - r.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE)
+    LibWin.ShowWindow(@handle, SW_SHOWNORMAL)
+    relayout
+  end
+
+  # Waits for and handles messages until closed, then closes.
+  pub def run : Nil
+    present
+    until @quit
+      timeout = @ui.wants_text_input? ? BLINK_MS.to_u32 : INFINITE
+      if LibWin.MsgWaitForMultipleObjectsEx(0_u32, null, timeout, QS_ALLINPUT, MWMO_INPUTAVAILABLE) == WAIT_TIMEOUT
+        @ui.blink
+      end
+      drain
+      present
+    end
+    close
+  end
+
+  # Drains the queue without waiting and draws a frame if needed.
+  pub def step : Nil
+    drain
+    present
+  end
+
+  pub def inject(e : Event) : Nil
+    @ui.dispatch(e)
+  end
+
+  # Redraws the whole window into a bitmap and saves it as a BMP.
+  pub def screenshot(path : String) : Nil
+    relayout
+    pw, ph = client_size
+    @canvas.capture(path, pw, ph) { @ui.frame; nil }
+    relayout
+    present
+  end
+
+  pub def close : Nil
+    return if @closed
+    @closed = true
+    @canvas.close
+    LibWin.DestroyWindow(@handle)
+  end
+
+  # Every message for this window. Runs inside Windows' modal loops too (dragging the
+  # frame, moving the window), which is why resizing redraws from here.
+  def message(hwnd : Void*, msg : UInt32, wp : UInt64, lp : Int64) : Int64
+    case msg
+    when WM_CLOSE
+      @quit = true
+      return 0_i64
+    when WM_ERASEBKGND
+      return 1_i64
+    when WM_PAINT
+      LibWin.ValidateRect(hwnd, Pointer(LibWin::RectI).new(0_u64))
+      redraw
+      return 0_i64
+    when WM_SIZE
+      redraw unless wp == SIZE_MINIMIZED
+      return 0_i64
+    when WM_DPICHANGED
+      @canvas.set_density((wp & 0xFFFF_u64).to_f32 / 96_f32)
+      r = Pointer(LibWin::RectI).new(lp.unsafe_to_u64).value
+      LibWin.SetWindowPos(hwnd, null, r.left, r.top, r.right - r.left, r.bottom - r.top, SWP_NOZORDER | SWP_NOACTIVATE)
+      return 0_i64
+    when WM_MOUSEMOVE
+      @ui.dispatch MouseMove.new(lx(lp), ly(lp))
+      return 0_i64
+    when WM_LBUTTONDOWN, WM_RBUTTONDOWN, WM_MBUTTONDOWN
+      # Captured so the release arrives even outside the window (SDL does the same).
+      LibWin.SetCapture(hwnd)
+      @ui.dispatch MouseDown.new(lx(lp), ly(lp), button(msg))
+      return 0_i64
+    when WM_LBUTTONUP, WM_RBUTTONUP, WM_MBUTTONUP
+      LibWin.ReleaseCapture
+      @ui.dispatch MouseUp.new(lx(lp), ly(lp), button(msg))
+      return 0_i64
+    when WM_MOUSEWHEEL
+      # Screen coordinates here; WHEEL_DELTA (120) is one notch, positive away from the user (up).
+      p = LibWin::Point.new
+      p.x = lo16(lp)
+      p.y = hi16(lp)
+      LibWin.ScreenToClient(hwnd, pointerof(p))
+      @ui.dispatch Wheel.new(p.x / @canvas.density, p.y / @canvas.density, hi16(wp.unsafe_to_i64) / 120_f32)
+      return 0_i64
+    when WM_KEYDOWN, WM_SYSKEYDOWN
+      shift = LibWin.GetKeyState(VK_SHIFT) < 0
+      @ui.dispatch KeyDown.new(key(wp), Mods.new(shift: shift, primary: primary_down?))
+      # Alt+F4 and Alt+Space are the system's.
+      return 0_i64 if msg == WM_KEYDOWN
+    when WM_CHAR
+      char(wp.unsafe_to_u16)
+      return 0_i64
+    end
+    LibWin.DefWindowProcW(hwnd, msg, wp, lp)
+  end
+
+  # One UTF-16 unit of typed text; a surrogate pair arrives as two messages.
+  def char(u : UInt16) : Nil
+    if u >= 0xD800_u16 && u <= 0xDBFF_u16
+      @high_surrogate = u
+      return
+    end
+    pair = StaticArray(UInt16, 2).new(0_u16)
+    if u >= 0xDC00_u16 && u <= 0xDFFF_u16
+      pair[0] = @high_surrogate
+      pair[1] = u
+    else
+      pair[0] = u
+    end
+    @high_surrogate = 0_u16
+    # Control characters (Backspace, Tab, Enter, Esc, Ctrl+letter) are keys, not text;
+    # without a text field focused nothing is typed (SDL text input is off then).
+    return if u < 0x20_u16 || u == 0x7F_u16
+    return unless @ui.wants_text_input?
+    return if primary_down?
+    @ui.dispatch TextInput.new(from_wide(pointerof(pair).as(UInt16*), 2))
+  end
+
+  # Whatever the size, the whole window is redrawn.
+  def redraw : Nil
+    # Messages sent from inside CreateWindowExW arrive before @handle is set.
+    return if @closed || @handle.address == 0
+    relayout
+    present
+  end
+
+  # Pixels per logical unit.
+  pub def density : Float32
+    @canvas.density
+  end
+
+  def present : Nil
+    sync_text_input
+    return unless @ui.needs_frame?
+    unless @canvas.attached?
+      pw, ph = client_size
+      @canvas.attach(@handle, pw, ph)
+    end
+    @canvas.begin_frame
+    @ui.frame
+    # Device lost: the target is gone; the WM_PAINT this asks for recreates it.
+    unless @canvas.end_frame
+      LibWin.InvalidateRect(@handle, Pointer(LibWin::RectI).new(0_u64), 0)
+    end
+  end
+
+  # The IME has a context only while a text field is focused, so keys typed elsewhere
+  # (shortcuts, Space on a button) are not composed (SDL_StartTextInput's job there).
+  def sync_text_input : Nil
+    want = @ui.wants_text_input?
+    return if want == @text_input
+    @text_input = want
+    LibImm.ImmAssociateContextEx(@handle, null, want ? IACE_DEFAULT : 0_u32)
+  end
+
+  # Hands the client area's logical size to Ui (always requests a redraw).
+  def relayout : Nil
+    pw, ph = client_size
+    @canvas.resize(pw, ph)
+    d = @canvas.density
+    @ui.resize(pw / d, ph / d)
+  end
+
+  def client_size : Tuple(Int32, Int32)
+    r = LibWin::RectI.new
+    LibWin.GetClientRect(@handle, pointerof(r))
+    {r.right - r.left, r.bottom - r.top}
+  end
+
+  def drain : Nil
+    while !@quit && LibWin.PeekMessageW(pointerof(@msg), null, 0_u32, 0_u32, PM_REMOVE) != 0
+      @quit = true if @msg.message == WM_QUIT
+      LibWin.TranslateMessage(pointerof(@msg))
+      LibWin.DispatchMessageW(pointerof(@msg))
+    end
+  end
+
+  def lx(lp : Int64) : Float32
+    lo16(lp) / @canvas.density
+  end
+
+  def ly(lp : Int64) : Float32
+    hi16(lp) / @canvas.density
+  end
+
+  def button(msg : UInt32) : MouseButton
+    case msg
+    when WM_RBUTTONDOWN, WM_RBUTTONUP then MouseButton::Right
+    when WM_MBUTTONDOWN, WM_MBUTTONUP then MouseButton::Middle
+    else                                   MouseButton::Left
+    end
+  end
+
+  def key(vk : UInt64) : Key
+    case vk
+    when VK_TAB    then Key::Tab
+    when VK_RETURN then Key::Enter
+    when VK_SPACE  then Key::Space
+    when VK_BACK   then Key::Backspace
+    when VK_DELETE then Key::Delete
+    when VK_LEFT   then Key::Left
+    when VK_RIGHT  then Key::Right
+    when VK_HOME   then Key::Home
+    when VK_END    then Key::End
+    when VK_ESCAPE then Key::Escape
+    when VK_C      then Key::C
+    when VK_V      then Key::V
+    else                Key::Other
+    end
+  end
+
+  @canvas : D2dCanvas
+  @clipboard : WinClipboard
+  @msg : LibWin::Msg
+  @quit : Bool
+  @closed : Bool
+  @text_input : Bool
+  @high_surrogate : UInt16
+  @box : Void*
+end
+
+# The system clipboard as UTF-16 text (CF_UNICODETEXT).
+pub class WinClipboard < Clipboard
+  # The owner window: with no owner, SetClipboardData fails after EmptyClipboard.
+  property hwnd : Void* = Pointer(Void).new(0_u64)
+
+  # Empty when the clipboard holds no text or another program has it open.
+  pub def get : String
+    return "" if LibWin.OpenClipboard(@hwnd) == 0
+    s = ""
+    mem = LibWin.GetClipboardData(CF_UNICODETEXT)
+    if mem.address != 0
+      p = LibWin.GlobalLock(mem)
+      if p.address != 0
+        s = from_wide(p.as(UInt16*))
+        LibWin.GlobalUnlock(mem)
+      end
+    end
+    LibWin.CloseClipboard
+    s
+  end
+
+  pub def set(s : String) : Nil
+    w = wide(s)
+    mem = LibWin.GlobalAlloc(GMEM_MOVEABLE, (w.size * 2).to_u64)
+    return if mem.address == 0
+    p = LibWin.GlobalLock(mem)
+    if p.address == 0
+      LibWin.GlobalFree(mem)
+      return
+    end
+    dst = p.as(UInt16*)
+    w.each_with_index { |u, i| dst[i] = u }
+    LibWin.GlobalUnlock(mem)
+    if LibWin.OpenClipboard(@hwnd) == 0
+      LibWin.GlobalFree(mem)
+      return
+    end
+    LibWin.EmptyClipboard
+    # On success the system owns the memory.
+    LibWin.GlobalFree(mem) if LibWin.SetClipboardData(CF_UNICODETEXT, mem).address == 0
+    LibWin.CloseClipboard
+  end
+end
