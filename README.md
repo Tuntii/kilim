@@ -55,10 +55,10 @@
    ```
    module example.com/app
 
-   require github.com/tuntii/kilim v0.1.1
+   require github.com/tuntii/kilim v0.2.0
    ```
 
-   or run `iyi get github.com/tuntii/kilim@v0.1.1`.
+   or run `iyi get github.com/tuntii/kilim@v0.2.0`.
 3. Write `main.iyi`:
 
    ```crystal
@@ -183,7 +183,7 @@ artifacts.
 
 ## Status
 
-kilim is at **v0.1**: small, tested, and young. Not there yet:
+kilim is at **v0.2**: small, tested, and young. Not there yet:
 
 - menu bar and multiple windows (one window per process);
 - image widget, theme system (light theme only), animation, drag and drop;
