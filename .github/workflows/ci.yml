@@ -133,3 +133,27 @@ jobs:
             smoke.bmp
             todo.bmp
           if-no-files-found: warn
+
+  # Releases from master once every platform passed: semantic-release reads the
+  # Conventional Commits since the last tag, picks the version (release.config.mjs),
+  # tags it and publishes a GitHub release with the notes.
+  release:
+    name: release
+    needs: smoke
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx --yes -p semantic-release@24 -p conventional-changelog-conventionalcommits@8 semantic-release
