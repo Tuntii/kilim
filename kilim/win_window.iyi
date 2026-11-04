@@ -111,13 +111,15 @@ pub class WinWindow
     @ui.dispatch(e)
   end
 
-  # Redraws the whole window into a bitmap and saves it as a BMP.
-  pub def screenshot(path : String) : Nil
+  # Redraws the whole window into a bitmap and saves it as a BMP; returns the pixels
+  # (0xFFRRGGBB, client size, rows top to bottom).
+  pub def screenshot(path : String) : Array(UInt32)
     relayout
     pw, ph = client_size
-    @canvas.capture(path, pw, ph) { @ui.frame; nil }
+    pixels = @canvas.capture(path, pw, ph) { @ui.frame; nil }
     relayout
     present
+    pixels
   end
 
   pub def close : Nil
