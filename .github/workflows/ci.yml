@@ -15,12 +15,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # sdl: on Windows the SDL backend must be asked for; elsewhere it is the only one.
           - os: windows-latest
             wrap: ""
+            sdl: -Dsdl
           - os: ubuntu-24.04
             wrap: xvfb-run -a
+            sdl: ""
           - os: macos-14
             wrap: ""
+            sdl: ""
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -46,6 +50,24 @@ jobs:
       - name: MSVC dev shell
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
+
+      # --- native Windows backend (Win32 + Direct2D + DirectWrite): needs no SDL ---
+      - name: Native smoke (Windows)
+        if: runner.os == 'Windows'
+        run: iyi run examples/smoke_win32.iyi
+      - name: Native todo self-test (Windows)
+        if: runner.os == 'Windows'
+        env:
+          KILIM_SELFTEST: todo_win32.bmp
+        run: iyi run examples/todo.iyi
+      - name: Native benchmarks (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          echo "## Benchmarks: ${{ matrix.os }} (native)" > bench_win32.md
+          iyi run bench/render.iyi | tee -a bench_win32.md
+          cat bench_win32.md >> "$GITHUB_STEP_SUMMARY"
+
       - name: SDL (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -81,11 +103,11 @@ jobs:
         shell: bash
         run: |
           iyi version
-          if ${{ matrix.wrap }} iyi run examples/smoke.iyi 2>&1 | tee smoke.log; then
+          if ${{ matrix.wrap }} iyi run ${{ matrix.sdl }} examples/smoke.iyi 2>&1 | tee smoke.log; then
             echo "video driver: default${{ matrix.wrap && ' (xvfb)' || '' }}"
           elif grep -qE 'kilim: SDL_(Init|CreateWindow|CreateRenderer)' smoke.log; then
             echo "window could not be opened, retrying with SDL_VIDEO_DRIVER=offscreen"
-            SDL_VIDEO_DRIVER=offscreen iyi run examples/smoke.iyi
+            SDL_VIDEO_DRIVER=offscreen iyi run ${{ matrix.sdl }} examples/smoke.iyi
             echo "video driver: offscreen"
           else
             exit 1
@@ -97,11 +119,11 @@ jobs:
         env:
           KILIM_SELFTEST: todo.bmp
         run: |
-          if ${{ matrix.wrap }} iyi run examples/todo.iyi 2>&1 | tee todo.log; then
+          if ${{ matrix.wrap }} iyi run ${{ matrix.sdl }} examples/todo.iyi 2>&1 | tee todo.log; then
             echo "video driver: default${{ matrix.wrap && ' (xvfb)' || '' }}"
           elif grep -qE 'kilim: SDL_(Init|CreateWindow|CreateRenderer)' todo.log; then
             echo "window could not be opened, retrying with SDL_VIDEO_DRIVER=offscreen"
-            SDL_VIDEO_DRIVER=offscreen iyi run examples/todo.iyi
+            SDL_VIDEO_DRIVER=offscreen iyi run ${{ matrix.sdl }} examples/todo.iyi
             echo "video driver: offscreen"
           else
             exit 1
@@ -113,7 +135,7 @@ jobs:
         run: |
           echo "## Benchmarks: ${{ matrix.os }}" > bench.md
           iyi run bench/core.iyi | tee -a bench.md
-          ${{ matrix.wrap }} iyi run bench/render.iyi | tee -a bench.md
+          ${{ matrix.wrap }} iyi run ${{ matrix.sdl }} bench/render.iyi | tee -a bench.md
           cat bench.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload benchmark results
@@ -121,7 +143,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: bench-${{ matrix.os }}
-          path: bench.md
+          path: |
+            bench.md
+            bench_win32.md
           if-no-files-found: warn
 
       - name: Upload screenshots
@@ -132,4 +156,6 @@ jobs:
           path: |
             smoke.bmp
             todo.bmp
+            smoke_win32.bmp
+            todo_win32.bmp
           if-no-files-found: warn
