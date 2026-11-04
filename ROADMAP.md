@@ -114,22 +114,27 @@ self-hosted runner: the Linux VBOT server, and a real Mac.
 
   Started: `bench/core.iyi` and `bench/render.iyi` run in CI on every platform
   and report to the job summary. Still to do: the idle wake-up count and the
-  regression gate. First numbers on a Windows desktop:
+  regression gate. Numbers on a Windows desktop (debug build, as in CI):
 
   | Full frame, to-do list | 100 rows | 1,000 rows | 10,000 rows |
   |---|---:|---:|---:|
-  | kilim core (layout + draw calls) | 0.08 ms | 0.8 ms | 10.5 ms |
-  | Real SDL window (text included) | 19 ms | 184 ms | 1,805 ms |
+  | kilim core (layout + draw calls), v0.1.1 | 0.08 ms | 0.8 ms | 10.5 ms |
+  | Real SDL window (text included), v0.1.1 | 19 ms | 184 ms | 1,805 ms |
+  | kilim core, with the caches below | 0.03 ms | 0.29 ms | 3.0 ms |
+  | Real SDL window, with the caches below | 0.40 ms | 0.61 ms | 3.1 ms |
 
-  Nearly all of the time goes to rasterising text. Every row is drawn, even
-  rows outside the scroll viewport. Two fixes follow from this: skip widgets
-  that lie outside the clip rectangle, and cache text.
-- **Text cache:** render through SDL3_ttf's text engine and a glyph atlas
-  (`TTF_CreateRendererTextEngine`) instead of rasterising strings on every
-  draw.
+  In v0.1.1 nearly all of the time went to rasterising text, and every row was
+  drawn, even rows outside the scroll viewport.
+- **Done: clip culling.** Containers skip children that lie outside the clip
+  rectangle (`Canvas#visible?`).
+- **Done: text cache.** `SdlCanvas` caches string sizes and rendered string
+  textures. Still open: a glyph atlas through SDL3_ttf's text engine
+  (`TTF_CreateRendererTextEngine`), so a changed string does not need a new
+  texture.
+- **Done in part: layout cache.** Each widget caches its preferred size until
+  it or a descendant is invalidated. Still open: skipping `layout` for
+  subtrees that did not change.
 - **Partial redraw:** track dirty rectangles and repaint only what changed.
-- **Layout cache:** skip `preferred`/`layout` for subtrees that did not
-  change.
 
 ## v0.3: the GPU backend
 
