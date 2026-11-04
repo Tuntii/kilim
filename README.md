@@ -5,7 +5,7 @@
 <h1 align="center">kilim</h1>
 
 <p align="center">
-  A retained-mode GUI library for <a href="https://iyi.dev">iyi</a>, woven from scratch on SDL3.
+  A retained-mode GUI library for <a href="https://iyi.dev">iyi</a>, woven from scratch on Win32 + Direct2D on Windows and SDL3 elsewhere.
 </p>
 
 <p align="center">
@@ -34,10 +34,13 @@
 - **Small, declarative API.** You build a tree of widgets once and change
   them directly (`label.text = "..."`, `list.add(row)`), in the spirit of V's
   `ui`.
-- **Plain iyi.** No `--crystal` and no Crystal standard library. The only
-  native dependencies are SDL3 and SDL3_ttf.
+- **Plain iyi.** No `--crystal` and no Crystal standard library. On Windows
+  kilim uses only the system's Win32, Direct2D and DirectWrite, so there are
+  no DLLs to ship; on Linux and macOS the native dependencies are SDL3 and
+  SDL3_ttf.
 - **Unicode text that works.** Turkish and other non-ASCII text displays and
-  edits correctly, with an embedded Noto Sans font.
+  edits correctly, with an embedded Noto Sans font. On Windows, characters it
+  lacks (emoji, CJK) come from the system's font fallback.
 - **Idle means idle.** kilim redraws only when something changes, and the
   layout follows live while you drag-resize the window.
 - **Tested on three platforms.** Every commit runs the tests, a smoke test
@@ -45,7 +48,8 @@
 
 ## Quick start
 
-1. Install [iyi 0.20.0](#iyi-0200) and [SDL3 + SDL3_ttf](#sdl3-and-sdl3_ttf).
+1. Install [iyi 0.20.0](#iyi-0200), and on Linux and macOS
+   [SDL3 + SDL3_ttf](#sdl3-and-sdl3_ttf).
 2. Add kilim to your `iyi.mod`:
 
    ```
@@ -137,7 +141,9 @@ curl -fsSL https://raw.githubusercontent.com/iyilang/iyi/v0.20.0/install.sh | IY
 
 ### SDL3 and SDL3_ttf
 
-The versions are pinned in `scripts/sdl-versions.txt`.
+The versions are pinned in `scripts/sdl-versions.txt`. On Windows SDL is only
+needed for the SDL backend, which a program selects with `-Dsdl`
+(`iyi run -Dsdl main.iyi`); the default Windows build uses the native backend.
 
 | Platform | Setup |
 |---|---|
@@ -154,6 +160,8 @@ iyi looks for `SDL3.lib` (`libSDL3` on Unix) in the directories listed in
 iyi test                                            # core tests, no SDL needed
 iyi run examples/todo.iyi                           # the to-do example
 KILIM_SELFTEST=todo.bmp iyi run examples/todo.iyi   # hands-off acceptance test, writes todo.bmp
+iyi run examples/smoke_win32.iyi                    # Windows: native backend end to end
+iyi run -Dsdl examples/smoke.iyi                    # SDL backend end to end (-Dsdl only on Windows)
 ```
 
 Benchmarks print Markdown tables (median and 95th percentile per case, for
@@ -162,7 +170,7 @@ results in the job summary:
 
 ```sh
 iyi run bench/core.iyi     # layout, draw traversal, hit-testing, typing; no SDL
-iyi run bench/render.iyi   # one full frame in a real SDL window, text included
+iyi run bench/render.iyi   # one full frame in a real window, text included
 ```
 
 To use a local clone from another project, add

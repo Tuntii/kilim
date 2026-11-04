@@ -32,6 +32,29 @@ tagged release that passes the full CI matrix.
 - **Performance comes before new features.** Rendering speed and the GPU
   backend come before text-editing and widget work.
 
+## Native backends
+
+kilim is moving off SDL to each operating system's own APIs. The core
+(widgets, layout, `Ui`) only knows `Canvas` and `Clipboard`, so a backend is a
+window, a canvas and a clipboard; `kilim/window` picks one at compile time.
+
+- **Windows: done.** Win32 window and message loop, Direct2D drawing and
+  DirectWrite text (`kilim/win_window`, `kilim/d2d_canvas`). It is the default
+  on Windows; `-Dsdl` selects SDL. Tested in CI by `examples/smoke_win32.iyi`
+  and the to-do selftest. Text uses the embedded Noto Sans through DirectWrite's
+  in-memory font loader, with the system font fallback for emoji and CJK; the
+  IME is switched on only while a text field is focused. Still open: placing
+  the IME composition window at the caret (with v0.4's IME work), and a CI
+  pixel comparison with the SDL screenshots (text antialiasing differs, so it
+  needs a tolerance).
+- **macOS: next.** Cocoa through the Objective-C runtime, CoreGraphics and
+  CoreText.
+- **Linux: open.** X11 or Wayland plus a text stack (FreeType, HarfBuzz,
+  fontconfig) is the most work; SDL stays the Linux backend until then.
+
+Open decision: whether the SDL GPU backend (v0.3) is still wanted once each
+platform has a native backend.
+
 ## CI matrix (target)
 
 | Platform | Runner | iyi | `renderer` | `gpu` |
