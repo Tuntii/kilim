@@ -1,5 +1,6 @@
-# Rendering benchmarks: one full frame in a real SDL window, text included.
-# Run (SDL on PATH / IYI_LIBRARY_PATH, see README): iyi run bench/render.iyi
+# Rendering benchmarks: one full frame in a real window, text included.
+# Run: iyi run bench/render.iyi (Windows: native backend; add -Dsdl for SDL, which
+# needs SDL on PATH / IYI_LIBRARY_PATH, see README).
 
 module bench/render
 
@@ -9,10 +10,14 @@ import kilim/widget::{Widget, Sizing}
 import kilim/box::{Box, Axis}
 import kilim/textbox::{Textbox}
 import kilim/event::{TextInput}
+import kilim/window::{BACKEND}
 
 def main : Int32
-  driver = ENV["SDL_RENDER_DRIVER"]? || "default"
-  header("Render (SDL, renderer: #{driver})")
+  if BACKEND == "sdl"
+    header("Render (SDL, renderer: #{ENV["SDL_RENDER_DRIVER"]? || "default"})")
+  else
+    header("Render (Win32 + Direct2D)")
+  end
   [100, 1000, 10000].each do |n|
     root = todo_tree(n)
     win = Kilim.window("kilim bench", 480, 420, root)
