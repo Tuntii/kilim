@@ -55,10 +55,10 @@
    ```
    module example.com/app
 
-   require github.com/tuntii/kilim v0.1.1
+   require github.com/tuntii/kilim v0.1.3
    ```
 
-   or run `iyi get github.com/tuntii/kilim@v0.1.1`.
+   or run `iyi get github.com/tuntii/kilim@v0.1.3`.
 3. Write `main.iyi`:
 
    ```crystal
