@@ -43,10 +43,12 @@ window, a canvas and a clipboard; `kilim/window` picks one at compile time.
   on Windows; `-Dsdl` selects SDL. Tested in CI by `examples/smoke_win32.iyi`
   and the to-do selftest. Text uses the embedded Noto Sans through DirectWrite's
   in-memory font loader, with the system font fallback for emoji and CJK; the
-  IME is switched on only while a text field is focused. Still open: placing
-  the IME composition window at the caret (with v0.4's IME work), and a CI
-  pixel comparison with the SDL screenshots (text antialiasing differs, so it
-  needs a tolerance).
+  IME is switched on only while a text field is focused, and its composition
+  window follows the caret. A lost GPU device recreates the render target
+  (simulated in the smoke test, since it cannot be caused on demand), and the
+  smoke test checks the screenshot's pixels at 150 %: fill colours exactly,
+  text only for ink. A pixel comparison with the SDL screenshots was dropped,
+  because the two text stacks rasterise differently.
 - **macOS: next.** Cocoa through the Objective-C runtime, CoreGraphics and
   CoreText.
 - **Linux: open.** X11 or Wayland plus a text stack (FreeType, HarfBuzz,
