@@ -78,8 +78,17 @@ def main : Int32
   caret_x = tb2.bounds.x + PADDING + rc.measure("abcdefghijklmnopqrstuvwxyzabcdefghijklmn").w - tb2.scroll_x
   expect caret_x <= tb2.bounds.x + tb2.bounds.w - PADDING, "caret visible"
   expect caret_x >= tb2.bounds.x + PADDING, "caret does not overflow on the left"
+  if r = ui2.caret_rect
+    expect_eq r.x, caret_x, "Ui#caret_rect is the scrolled caret (IME position)"
+    expect_eq r.h, rc.line_height, "caret is one line high"
+  else
+    expect false, "a focused textbox has a caret_rect"
+  end
   ui2.dispatch KeyDown.new(Key::Home, Mods.new)
   expect_eq tb2.scroll_x, 0_f32, "Home -> scroll_x 0"
+  if r = ui2.caret_rect
+    expect_eq r.x, tb2.bounds.x + PADDING, "caret_rect follows Home"
+  end
 
   # blink and focus
   ui2.blink
@@ -89,6 +98,7 @@ def main : Int32
   ui2.blink
   ui2.focus(nil)
   expect !ui2.wants_text_input?, "false once focus is gone"
+  expect ui2.caret_rect.nil?, "no caret_rect without focus"
   ui2.focus(tb2)
   expect tb2.caret_visible, "caret visible when focus changes"
   ui2.dispatch TextInput.new("z")

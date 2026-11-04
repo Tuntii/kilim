@@ -187,7 +187,10 @@ kilim is at **v0.1**: small, tested, and young. Not there yet:
 
 - menu bar and multiple windows (one window per process);
 - image widget, theme system (light theme only), animation, drag and drop;
-- text selection, IME and multi-line text;
+- text selection and multi-line text;
+- inline IME composition: text typed through an input method arrives when it
+  is committed (on Windows the input method shows it until then in its own
+  window at the caret);
 - accessibility (screen readers);
 - mobile and web.
 
@@ -226,9 +229,12 @@ CI runs without a visible display, so check these by hand on a real screen:
   natural scrolling.
 - Resizing the window by dragging: the layout should follow without freezing.
 - CPU use while idle should be close to 0 %.
-- On Windows at 125-150 % display scaling, is the UI physically too small?
-  SDL may report a pixel density of 1 and put the scale in
-  `SDL_GetWindowDisplayScale`.
+- On Windows at 125-150 % display scaling, the UI should have the same
+  physical size as other apps, also after moving the window to a monitor with
+  a different scale. (With `-Dsdl`, SDL may report a pixel density of 1 and put
+  the scale in `SDL_GetWindowDisplayScale`.)
+- With a Japanese, Chinese or Korean IME on Windows, the composition and
+  candidate windows open next to the caret and do not cover the text.
 - On AltGr layouts (Polish AltGr+C, Hungarian AltGr+V), the character is typed
   and copy/paste is not triggered.
 

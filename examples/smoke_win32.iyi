@@ -1,10 +1,11 @@
 # End-to-end check of the native Windows backend (the SDL one is smoke.iyi, built
 # with -Dsdl): opens a window, posts real Win32 messages (click, Enter, typed text
-# with a surrogate pair), checks the embedded font and the IME switch, round-trips
-# the clipboard (and puts back the text it held), exercises the live resize path
-# (WM_SIZE redraws from the window procedure) and a move to a 150 % display
-# (WM_DPICHANGED), saves smoke_win32.bmp at that scale and ends the run loop with
-# WM_CLOSE. Prints `smoke ok` and exits 0, or the reason and 1.
+# with a surrogate pair), checks the embedded font, the IME switch and its window at
+# the caret, round-trips the clipboard (and puts back the text it held), recovers
+# from a (simulated) lost GPU device, exercises the live resize path (WM_SIZE
+# redraws from the window procedure) and a move to a 150 % display
+# (WM_DPICHANGED), saves smoke_win32.bmp at that scale and checks its pixels, and
+# ends the run loop with WM_CLOSE. Prints `smoke ok` and exits 0, or the reason and 1.
 
 module examples/smoke_win32
 
@@ -18,6 +19,8 @@ import kilim/label::{Label}
 import kilim/button::{Button}
 import kilim/textbox::{Textbox}
 import kilim/window::{Window}
+import kilim/canvas::{Color}
+import kilim/theme::*
 
 PAD = 12_f32
 
@@ -46,6 +49,21 @@ end
 def at(win : Window, x : Float32, y : Float32) : Int64
   d = win.density
   ((y * d).round.to_i64 << 16) | (x * d).round.to_i64
+end
+
+# The screenshot pixel at logical (x, y); `w` is the width in pixels.
+def pixel(px : Array(UInt32), w : Int32, d : Float32, x : Float32, y : Float32) : UInt32
+  px[(y * d).to_i * w + (x * d).to_i]
+end
+
+# Same colour, within 2 per channel (colour conversion may round).
+def near?(p : UInt32, c : Color) : Bool
+  ch = ->(shift : Int32, v : UInt8) { (((p >> shift) & 0xFF_u32).to_i - v.to_i).abs <= 2 }
+  ch.call(16, c.r) && ch.call(8, c.g) && ch.call(0, c.b)
+end
+
+def hex(p : UInt32) : String
+  "#" + (p & 0xFFFFFF_u32).to_s(16).rjust(6, '0')
 end
 
 def main : Int32
@@ -85,12 +103,38 @@ def main : Int32
   win.step
   fail("typed text is #{input.text.inspect}, expected \"ş😀A\"") unless input.text == "ş😀A"
 
+  # The IME's composition window follows the caret (client pixels).
+  himc = LibImm.ImmGetContext(win.handle)
+  if himc.address != 0
+    cf = LibImm::CompositionForm.new
+    LibImm.ImmGetCompositionWindow(himc, pointerof(cf))
+    LibImm.ImmReleaseContext(win.handle, himc)
+    caret = input.caret_rect
+    fail("the focused textbox has no caret") unless caret
+    ex = (caret.x * win.density).round.to_i
+    ey = (caret.y * win.density).round.to_i
+    fail("IME window at #{cf.x},#{cf.y} px, caret at #{ex},#{ey}") unless cf.x == ex && cf.y == ey && cf.style == CFS_POINT
+    puts "ime window: #{cf.x},#{cf.y} px"
+  end
+
   saved = win.ui.clipboard.get
   clip = "Merhaba şöğüt 😀"
   win.ui.clipboard.set(clip)
   got = win.ui.clipboard.get
   win.ui.clipboard.set(saved) unless saved.empty?
   fail("clipboard round trip gave #{got.inspect}") unless got == clip
+
+  # Lost GPU device: the frame is dropped, the window target released, and the
+  # WM_PAINT this queues recreates it and draws again on the next step.
+  canvas.lose_device
+  input.text = input.text
+  win.step
+  fail("no frame ended after lose_device") if canvas.losing_device?
+  fail("render target survived a lost device") if canvas.attached?
+  win.step
+  fail("render target was not recreated after a lost device") unless canvas.attached?
+  fail("no frame was drawn after a lost device") if win.ui.needs_frame?
+  puts "device lost: recreated"
 
   # Live resize: SetWindowPos sends WM_SIZE synchronously, and the window procedure
   # must lay out and draw before the loop runs. The button fills the client width.
@@ -120,7 +164,36 @@ def main : Int32
   puts "dpi 150 %: #{r.right}x#{r.bottom} px"
 
   win.step
-  win.screenshot("smoke_win32.bmp")
+  px = win.screenshot("smoke_win32.bmp")
+
+  # Pixels at 150 %: fills are aliased, so their colours are exact; text is checked
+  # only for ink, because its antialiasing depends on the machine.
+  fail("screenshot has #{px.size} pixels, expected #{r.right * r.bottom}") unless px.size == r.right * r.bottom
+  w = r.right
+  d = win.density
+  bg = pixel(px, w, d, 2_f32, 2_f32)
+  fail("background is #{hex(bg)}") unless near?(bg, BG)
+  bb = button.bounds
+  fill = button.hovered ? BUTTON_HOVER : BUTTON_BG
+  got = pixel(px, w, d, bb.x + 3, bb.y + 3)
+  fail("button fill is #{hex(got)}") unless near?(got, fill)
+  ib = input.bounds
+  ring = pixel(px, w, d, ib.x, ib.y + ib.h / 2)
+  fail("textbox focus ring is #{hex(ring)}") unless near?(ring, FOCUS_RING)
+  lb = root.children[0].bounds
+  ink = 0
+  y = lb.y
+  while y < lb.y + lb.h
+    x = lb.x
+    while x < lb.x + lb.w
+      p = pixel(px, w, d, x, y)
+      ink += 1 if (p & 0xFF_u32) < 100_u32 && ((p >> 8) & 0xFF_u32) < 100_u32
+      x += 1_f32 / d
+    end
+    y += 1_f32 / d
+  end
+  fail("label has #{ink} dark pixels, expected text") unless ink > 50
+  puts "pixels: ok (label ink #{ink})"
 
   # run's loop must end on WM_CLOSE (and close the window).
   post(win, WM_CLOSE, 0_u64, 0_i64)

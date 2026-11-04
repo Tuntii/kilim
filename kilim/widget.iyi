@@ -95,6 +95,11 @@ pub abstract class Widget
     false
   end
 
+  # Where text is inserted, in logical units (the IME places its windows there).
+  pub def caret_rect : Rect?
+    nil
+  end
+
   # Ui calls this when focus changes and on the blink timer.
   pub def focus_changed : Nil
   end

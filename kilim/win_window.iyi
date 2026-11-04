@@ -111,13 +111,15 @@ pub class WinWindow
     @ui.dispatch(e)
   end
 
-  # Redraws the whole window into a bitmap and saves it as a BMP.
-  pub def screenshot(path : String) : Nil
+  # Redraws the whole window into a bitmap and saves it as a BMP; returns the pixels
+  # (0xFFRRGGBB, client size, rows top to bottom).
+  pub def screenshot(path : String) : Array(UInt32)
     relayout
     pw, ph = client_size
-    @canvas.capture(path, pw, ph) { @ui.frame; nil }
+    pixels = @canvas.capture(path, pw, ph) { @ui.frame; nil }
     relayout
     present
+    pixels
   end
 
   pub def close : Nil
@@ -224,6 +226,7 @@ pub class WinWindow
     end
     @canvas.begin_frame
     @ui.frame
+    place_ime
     # Device lost: the target is gone; the WM_PAINT this asks for recreates it.
     unless @canvas.end_frame
       LibWin.InvalidateRect(@handle, Pointer(LibWin::RectI).new(0_u64), 0)
@@ -237,6 +240,35 @@ pub class WinWindow
     return if want == @text_input
     @text_input = want
     LibImm.ImmAssociateContextEx(@handle, null, want ? IACE_DEFAULT : 0_u32)
+  end
+
+  # Puts the IME's composition window at the caret and keeps its candidate list from
+  # covering the line being typed. Layout and edits only change the caret in a frame.
+  def place_ime : Nil
+    return unless @text_input
+    r = @ui.caret_rect
+    return unless r
+    himc = LibImm.ImmGetContext(@handle)
+    return if himc.address == 0
+    d = @canvas.density
+    x = (r.x * d).round.to_i
+    y = (r.y * d).round.to_i
+    b = ((r.y + r.h) * d).round.to_i
+    cf = LibImm::CompositionForm.new
+    cf.style = CFS_POINT
+    cf.x = x
+    cf.y = y
+    LibImm.ImmSetCompositionWindow(himc, pointerof(cf))
+    cand = LibImm::CandidateForm.new
+    cand.style = CFS_EXCLUDE
+    cand.x = x
+    cand.y = b
+    cand.left = x
+    cand.top = y
+    cand.right = x + 1
+    cand.bottom = b
+    LibImm.ImmSetCandidateWindow(himc, pointerof(cand))
+    LibImm.ImmReleaseContext(@handle, himc)
   end
 
   # Hands the client area's logical size to Ui (always requests a redraw).

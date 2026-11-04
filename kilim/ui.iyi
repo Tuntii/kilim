@@ -71,6 +71,14 @@ pub class Ui < Context
     false
   end
 
+  # The focused widget's caret, if it has one.
+  pub def caret_rect : Rect?
+    if f = @focused
+      return f.caret_rect
+    end
+    nil
+  end
+
   # Window calls this every BLINK_MS; it only affects the focused widget.
   pub def blink : Nil
     if f = @focused

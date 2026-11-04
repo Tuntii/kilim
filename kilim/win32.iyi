@@ -118,6 +118,32 @@ lib ::LibImm
   fun ImmAssociateContextEx(hwnd : Void*, himc : Void*, flags : UInt32) : Int32
   fun ImmGetContext(hwnd : Void*) : Void*
   fun ImmReleaseContext(hwnd : Void*, himc : Void*) : Int32
+  fun ImmSetCompositionWindow(himc : Void*, form : CompositionForm*) : Int32
+  fun ImmGetCompositionWindow(himc : Void*, form : CompositionForm*) : Int32
+  fun ImmSetCandidateWindow(himc : Void*, form : CandidateForm*) : Int32
+
+  # COMPOSITIONFORM: a POINT and a RECT, flattened; client pixels.
+  struct CompositionForm
+    style : UInt32
+    x : Int32
+    y : Int32
+    left : Int32
+    top : Int32
+    right : Int32
+    bottom : Int32
+  end
+
+  # CANDIDATEFORM
+  struct CandidateForm
+    index : UInt32
+    style : UInt32
+    x : Int32
+    y : Int32
+    left : Int32
+    top : Int32
+    right : Int32
+    bottom : Int32
+  end
 end
 
 @[Link("d2d1")]
@@ -239,6 +265,8 @@ pub GMEM_MOVEABLE       = 2_u32
 pub ERROR_CLASS_ALREADY_EXISTS = 1410
 pub DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4_i64
 pub IACE_DEFAULT        = 0x0010_u32
+pub CFS_POINT           = 0x0002_u32
+pub CFS_EXCLUDE         = 0x0080_u32
 
 pub D2DERR_RECREATE_TARGET = -2003238900 # 0x8899000C
 
