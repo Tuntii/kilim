@@ -209,10 +209,11 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 (`feat:`, `fix:`, `perf:`, `docs:`, `ci:`, `bench:` and so on), because releases
 are cut from them: after CI passes on `master`,
 [semantic-release](https://github.com/semantic-release/semantic-release) tags
-the next version and publishes the release notes. `fix` and `perf` make a patch
-release and `feat` a minor one; until 1.0 a breaking change (`feat!:` or a
-`BREAKING CHANGE:` footer) also makes a minor release. Other types release
-nothing. Pull requests are merged with a merge commit rather than squashed, so
+the next version and publishes the release notes. For now `fix`, `perf` and
+`feat` all make a patch release, and so does a breaking change (`feat!:` or a
+`BREAKING CHANGE:` footer), which the release notes list under "Breaking
+changes". Other types release nothing. A new minor version is tagged by hand
+when the project decides it is time. Pull requests are merged with a merge commit rather than squashed, so
 each commit keeps its message.
 
 <details>
