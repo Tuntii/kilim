@@ -69,10 +69,22 @@ pub class Textbox < Widget
       c.text(bounds.x + PADDING - @scroll_x, ty, @edit.text, FG)
     end
     if focused && @caret_visible
-      cx = bounds.x + PADDING + c.measure(@edit.before_cursor).w - @scroll_x
-      c.line(cx, ty, cx, ty + c.line_height, FG)
+      r = caret_at(c)
+      c.line(r.x, r.y, r.x, r.y + r.h, FG)
     end
     c.pop_clip
+  end
+
+  pub def caret_rect : Rect?
+    if c = @canvas
+      return caret_at(c)
+    end
+    nil
+  end
+
+  def caret_at(c : Canvas) : Rect
+    ty = bounds.y + (bounds.h - c.line_height) / 2
+    Rect.new(bounds.x + PADDING + c.measure(@edit.before_cursor).w - @scroll_x, ty, 1_f32, c.line_height)
   end
 
   pub def handle(e : Event, ui : Context) : Bool
