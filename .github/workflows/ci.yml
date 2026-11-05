@@ -22,7 +22,7 @@ jobs:
           - os: ubuntu-24.04
             wrap: xvfb-run -a
             sdl: ""
-          - os: macos-14
+          - os: macos-15
             wrap: ""
             sdl: ""
     runs-on: ${{ matrix.os }}
