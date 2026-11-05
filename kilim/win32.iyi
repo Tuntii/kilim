@@ -69,6 +69,7 @@ lib ::LibWin
   fun GetModuleHandleW(name : UInt16*) : Void*
   # Int32: the prelude declares the same C function that way.
   fun GetLastError : Int32
+  fun GetTickCount64 : UInt64
   fun RegisterClassExW(wc : WndClassExW*) : UInt16
   fun CreateWindowExW(ex : UInt32, cls : UInt16*, title : UInt16*, style : UInt32, x : Int32, y : Int32, w : Int32, h : Int32, parent : Void*, menu : Void*, inst : Void*, param : Void*) : Void*
   fun DefWindowProcW(hwnd : Void*, msg : UInt32, wp : UInt64, lp : Int64) : Int64

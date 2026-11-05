@@ -10,6 +10,7 @@ import kilim/sdl_canvas::{SdlCanvas, SdlClipboard}
 import kilim/event::*
 import kilim/widget::{Widget}
 import kilim/ui::{Ui}
+import kilim/timers::{Timers}
 import kilim/theme::*
 
 # primary: Cmd on macOS, Ctrl elsewhere. Ctrl+Alt together means AltGr
@@ -42,6 +43,8 @@ pub class SdlWindow
     @quit = false
     @closed = false
     @text_input = false
+    @timers = Timers.new
+    @blink_at = -1_i64
     # Every ivar must be filled before handing out self.
     @watch_box = Pointer(Void).new(0_u64)
     # Live resize: on Windows/macOS the event loop stalls during a drag,
@@ -67,15 +70,12 @@ pub class SdlWindow
   pub def run : Nil
     present
     until @quit
-      if @ui.wants_text_input?
-        if LibSDL3.SDL_WaitEventTimeout(pointerof(@event), BLINK_MS)
-          handle_event
-        else
-          @ui.blink
-        end
-      elsif LibSDL3.SDL_WaitEvent(pointerof(@event))
-        handle_event
-      end
+      wait = wait_ms(clock_ms)
+      got = wait < 0 ? LibSDL3.SDL_WaitEvent(pointerof(@event)) : LibSDL3.SDL_WaitEventTimeout(pointerof(@event), wait)
+      handle_event if got
+      now = clock_ms
+      tick_blink(now, !got)
+      @timers.fire(now)
       drain
       present
     end
@@ -84,8 +84,53 @@ pub class SdlWindow
 
   # Drains the queue without waiting and draws a frame if needed.
   pub def step : Nil
+    @timers.fire(clock_ms)
     drain
     present
+  end
+
+  # Runs the block every ms milliseconds on the event loop (no threads); returns an id for cancel_timer.
+  pub def every(ms : Int32, &fn : -> Nil) : Int32
+    @timers.add(ms, true, clock_ms, &fn)
+  end
+
+  # Runs the block once, ms milliseconds from now; returns an id for cancel_timer.
+  pub def after(ms : Int32, &fn : -> Nil) : Int32
+    @timers.add(ms, false, clock_ms, &fn)
+  end
+
+  pub def cancel_timer(id : Int32) : Nil
+    @timers.cancel(id)
+  end
+
+  # Milliseconds to wait for events: until the caret blinks or the next timer, whichever
+  # is first; -1 for no limit.
+  def wait_ms(now : Int64) : Int32
+    wait = -1
+    if @ui.wants_text_input?
+      @blink_at = now + BLINK_MS if @blink_at < 0_i64
+      wait = (@blink_at > now ? @blink_at - now : 0_i64).to_i
+    else
+      @blink_at = -1_i64
+    end
+    if t = @timers.next_in(now)
+      wait = t if wait < 0 || t < wait
+    end
+    wait
+  end
+
+  # The blink keeps its own cadence: a wake for a timer must not blink the caret.
+  def tick_blink(now : Int64, idle : Bool) : Nil
+    if !idle
+      @blink_at = -1_i64
+    elsif @ui.wants_text_input? && @blink_at >= 0_i64 && now >= @blink_at
+      @ui.blink
+      @blink_at = now + BLINK_MS
+    end
+  end
+
+  def clock_ms : Int64
+    LibSDL3.SDL_GetTicks.unsafe_to_i64
   end
 
   pub def inject(e : Event) : Nil
@@ -233,6 +278,9 @@ pub class SdlWindow
   @quit : Bool
   @closed : Bool
   @text_input : Bool
+  @timers : Timers
+  # When the caret next blinks (clock ms); -1 while no text field wants the caret.
+  @blink_at : Int64
   @watch : LibSDL3::EventFilter
   @watch_box : Void*
 end

@@ -198,6 +198,7 @@ lib ::LibSDL3
   fun SDL_AddEventWatch(filter : EventFilter, userdata : Void*) : Bool
   fun SDL_RemoveEventWatch(filter : EventFilter, userdata : Void*) : Void
   fun SDL_GetModState : UInt16
+  fun SDL_GetTicks : UInt64
   fun SDL_StartTextInput(window : Void*) : Bool
   fun SDL_StopTextInput(window : Void*) : Bool
   fun SDL_SetClipboardText(text : UInt8*) : Bool

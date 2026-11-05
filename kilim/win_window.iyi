@@ -12,6 +12,7 @@ import kilim/clipboard::{Clipboard}
 import kilim/event::*
 import kilim/widget::{Widget}
 import kilim/ui::{Ui}
+import kilim/timers::{Timers}
 import kilim/theme::*
 
 CLASS_NAME = wide("kilim")
@@ -38,6 +39,8 @@ pub class WinWindow
     @quit = false
     @closed = false
     @text_input = false
+    @timers = Timers.new
+    @blink_at = -1_i64
     @high_surrogate = 0_u16
     # Every ivar must be filled before handing out self. The box lives in this ivar:
     # the window's only other copy is GWLP_USERDATA, invisible to the GC.
@@ -91,10 +94,12 @@ pub class WinWindow
   pub def run : Nil
     present
     until @quit
-      timeout = @ui.wants_text_input? ? BLINK_MS.to_u32 : INFINITE
-      if LibWin.MsgWaitForMultipleObjectsEx(0_u32, null, timeout, QS_ALLINPUT, MWMO_INPUTAVAILABLE) == WAIT_TIMEOUT
-        @ui.blink
-      end
+      wait = wait_ms(clock_ms)
+      timeout = wait < 0 ? INFINITE : wait.to_u32
+      idle = LibWin.MsgWaitForMultipleObjectsEx(0_u32, null, timeout, QS_ALLINPUT, MWMO_INPUTAVAILABLE) == WAIT_TIMEOUT
+      now = clock_ms
+      tick_blink(now, idle)
+      @timers.fire(now)
       drain
       present
     end
@@ -103,8 +108,53 @@ pub class WinWindow
 
   # Drains the queue without waiting and draws a frame if needed.
   pub def step : Nil
+    @timers.fire(clock_ms)
     drain
     present
+  end
+
+  # Runs the block every ms milliseconds on the event loop (no threads); returns an id for cancel_timer.
+  pub def every(ms : Int32, &fn : -> Nil) : Int32
+    @timers.add(ms, true, clock_ms, &fn)
+  end
+
+  # Runs the block once, ms milliseconds from now; returns an id for cancel_timer.
+  pub def after(ms : Int32, &fn : -> Nil) : Int32
+    @timers.add(ms, false, clock_ms, &fn)
+  end
+
+  pub def cancel_timer(id : Int32) : Nil
+    @timers.cancel(id)
+  end
+
+  # Milliseconds to wait for events: until the caret blinks or the next timer, whichever
+  # is first; -1 for no limit.
+  def wait_ms(now : Int64) : Int32
+    wait = -1
+    if @ui.wants_text_input?
+      @blink_at = now + BLINK_MS if @blink_at < 0_i64
+      wait = (@blink_at > now ? @blink_at - now : 0_i64).to_i
+    else
+      @blink_at = -1_i64
+    end
+    if t = @timers.next_in(now)
+      wait = t if wait < 0 || t < wait
+    end
+    wait
+  end
+
+  # The blink keeps its own cadence: a wake for a timer must not blink the caret.
+  def tick_blink(now : Int64, idle : Bool) : Nil
+    if !idle
+      @blink_at = -1_i64
+    elsif @ui.wants_text_input? && @blink_at >= 0_i64 && now >= @blink_at
+      @ui.blink
+      @blink_at = now + BLINK_MS
+    end
+  end
+
+  def clock_ms : Int64
+    LibWin.GetTickCount64.unsafe_to_i64
   end
 
   pub def inject(e : Event) : Nil
@@ -333,6 +383,9 @@ pub class WinWindow
   @quit : Bool
   @closed : Bool
   @text_input : Bool
+  @timers : Timers
+  # When the caret next blinks (clock ms); -1 while no text field wants the caret.
+  @blink_at : Int64
   @high_surrogate : UInt16
   @box : Void*
 end

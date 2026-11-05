@@ -1,0 +1,86 @@
+# Timers: scheduling, repeating, cancelling and re-entrancy, with a fake clock.
+
+module test/timers_test
+
+import kilim/timers::{Timers}
+import kilim/testing::*
+
+class Count
+  property n = 0
+end
+
+def main : Int32
+  # A repeating timer: due after its interval, then again one interval later.
+  t = Timers.new
+  c = Count.new
+  t.add(100, true, 0_i64) { c.n += 1; nil }
+  expect_eq t.next_in(0_i64), 100, "next_in right after add"
+  expect_eq t.fire(99_i64), false, "not due at 99"
+  expect_eq c.n, 0, "not run at 99"
+  expect_eq t.fire(100_i64), true, "due at 100"
+  expect_eq c.n, 1, "ran once"
+  expect_eq t.next_in(100_i64), 100, "rescheduled"
+
+  # A one-shot timer fires once and leaves nothing behind.
+  t = Timers.new
+  c = Count.new
+  t.add(50, false, 0_i64) { c.n += 1; nil }
+  expect_eq t.fire(50_i64), true, "one-shot due at 50"
+  expect_eq t.fire(500_i64), false, "one-shot is gone"
+  expect_eq c.n, 1, "one-shot ran once"
+  expect t.next_in(50_i64).nil?, "no timers: next_in is nil"
+
+  # next_in is never negative for an overdue timer.
+  t = Timers.new
+  t.add(10, false, 0_i64) { nil }
+  expect_eq t.next_in(90_i64), 0, "overdue: next_in 0"
+
+  # cancel before it is due.
+  t = Timers.new
+  c = Count.new
+  id = t.add(10, true, 0_i64) { c.n += 1; nil }
+  t.cancel(id)
+  expect_eq t.fire(10_i64), false, "cancelled timer does not run"
+  expect t.next_in(0_i64).nil?, "cancelled timer is gone"
+
+  # A block that cancels its own timer does not run again.
+  t = Timers.new
+  c = Count.new
+  me = Count.new
+  me.n = t.add(10, true, 0_i64) { c.n += 1; t.cancel(me.n); nil }
+  t.fire(10_i64)
+  t.fire(20_i64)
+  expect_eq c.n, 1, "self-cancel stops the repeat"
+
+  # A block can cancel another timer that is due in the same fire.
+  t = Timers.new
+  c = Count.new
+  other = Count.new
+  t.add(10, false, 0_i64) { t.cancel(other.n); nil }
+  other.n = t.add(10, false, 0_i64) { c.n += 1; nil }
+  t.fire(10_i64)
+  expect_eq c.n, 0, "a timer cancelled by an earlier one in the same fire does not run"
+
+  # A block may add a timer: it does not run in the current fire, only at its own time.
+  t = Timers.new
+  c = Count.new
+  t.add(10, false, 0_i64) { t.add(5, false, 10_i64) { c.n += 1; nil }; nil }
+  t.fire(10_i64)
+  expect_eq c.n, 0, "added timer does not run in the same fire"
+  expect_eq t.next_in(10_i64), 5, "added timer is due at its own time"
+  expect_eq t.fire(15_i64), true, "added timer fires"
+  expect_eq c.n, 1, "added timer ran"
+
+  # After a long pause a repeating timer runs once, not once per missed interval.
+  t = Timers.new
+  c = Count.new
+  t.add(100, true, 0_i64) { c.n += 1; nil }
+  t.fire(1000_i64)
+  expect_eq c.n, 1, "one run after a long pause"
+  expect_eq t.next_in(1000_i64), 100, "rescheduled from the fire time"
+
+  puts "timers ok"
+  0
+end
+
+exit main

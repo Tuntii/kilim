@@ -90,6 +90,11 @@ with their qualified names (`Kilim::Widget::Widget`). For short names, also
 import `github.com/tuntii/kilim/kilim/<name>::{Type}`, as the [quick start](docs/quick-start.md) does
 for `Widget`.
 
+**Timers.** `win.every(5000) { ... }` runs a block on the event loop every five
+seconds and `win.after(ms) { ... }` runs it once; both return an id for
+`win.cancel_timer(id)`. The loop sleeps until the next timer is due, so idle
+windows use no CPU, and the block runs on the UI thread and may change widgets.
+
 **Keyboard.** Tab and Shift+Tab move focus. In a textbox, use the arrow keys,
 Home/End, Backspace/Delete and Enter, plus Ctrl/Cmd+V to paste. Ctrl/Cmd+C
 copies the whole text, because there is no selection yet.

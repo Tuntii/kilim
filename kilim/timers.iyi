@@ -1,0 +1,70 @@
+# Timers for the event loop. The clock is passed in (milliseconds, monotonic), so
+# the windows own the real clock and tests use a fake one.
+
+module kilim/timers
+
+class Entry
+  getter id : Int32
+  getter interval : Int32
+  getter repeat : Bool
+  getter fn : -> Nil
+  property due : Int64
+  property live : Bool = true
+
+  def initialize(@id : Int32, @interval : Int32, @repeat : Bool, @due : Int64, @fn : -> Nil)
+  end
+end
+
+pub class Timers
+  def initialize
+    @items = [] of Entry
+    @next_id = 1
+  end
+
+  # Runs fn after interval_ms (and again every interval_ms when repeat). Returns an id for cancel.
+  pub def add(interval_ms : Int32, repeat : Bool, now_ms : Int64, &fn : -> Nil) : Int32
+    id = @next_id
+    @next_id += 1
+    @items << Entry.new(id, interval_ms, repeat, now_ms + interval_ms, fn)
+    id
+  end
+
+  # Safe from inside a timer's own block, and for ids that already ran or never existed.
+  pub def cancel(id : Int32) : Nil
+    @items.each { |e| e.live = false if e.id == id }
+    @items = @items.reject { |e| e.id == id }
+  end
+
+  # Milliseconds until the next timer is due (0 when overdue); nil when there are none.
+  pub def next_in(now_ms : Int64) : Int32?
+    best = nil
+    @items.each do |e|
+      d = e.due - now_ms
+      d = 0_i64 if d < 0_i64
+      best = d if best.nil? || d < best
+    end
+    return nil unless best
+    best.to_i
+  end
+
+  # Runs every due timer. A repeating one is rescheduled from now_ms, so a long pause
+  # costs one run, not one per missed interval. Blocks may add and cancel timers.
+  pub def fire(now_ms : Int64) : Bool
+    due = @items.select { |e| e.due <= now_ms }
+    return false if due.empty?
+    due.each do |e|
+      next unless e.live
+      if e.repeat
+        e.due = now_ms + e.interval
+      else
+        e.live = false
+        @items = @items.reject { |x| x.id == e.id }
+      end
+      e.fn.call
+    end
+    true
+  end
+
+  @items : Array(Entry)
+  @next_id : Int32
+end
