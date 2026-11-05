@@ -1,8 +1,8 @@
 # kilim roadmap
 
-kilim's goal is to make desktop GUI apps practical in iyi, in the spirit of
-V's `ui`: widgets drawn by kilim itself, the same look on every platform, and
-a small declarative API.
+kilim's goal is to be **the** GUI library for iyi: everything a desktop app
+needs, with widgets drawn by kilim itself, the same look on every platform,
+and a small declarative API in the spirit of V's `ui`.
 
 This is the plan for the twelve months from December 2026 to November 2027:
 **one release a month and about ten pull requests a month**, ending with
@@ -29,6 +29,20 @@ This is the plan for the twelve months from December 2026 to November 2027:
   keystroke lays out the whole tree again (about 3 ms at 10,000 rows), and
   hit-testing scans children one by one (0.14 ms per mouse move at 10,000
   rows).
+
+## What 1.0 contains
+
+| Area | At 1.0 |
+|---|---|
+| Layout | row, column, grid, stack, scroll (both axes), split pane, tabs; alignment, min/max sizes |
+| Input | button, checkbox, radio group, toggle switch, slider, number field, text field, password field, multi-line text area, dropdown, date picker, colour picker |
+| Display | label (wrapping), image, progress bar, spinner, tooltip, toast |
+| Data | virtual list, table with resizable and sortable columns, tree view |
+| App | menu bar, context menus, toolbar, status bar, modal and file dialogs, multiple windows, keyboard shortcuts, file drop, cursors, timers and animation, a custom-drawing widget |
+| Text | selection, undo/redo, inline IME, Turkish, emoji and CJK |
+| Look | light, dark and high-contrast themes, following the system; rounded corners; per-widget styles |
+| Platforms | Windows, Linux and macOS on x86-64 and arm64; native backends on Windows and (if the spike works) macOS |
+| Quality | screen-reader support on Windows and macOS, packaging guides, API reference, tutorial, examples gallery |
 
 ## Decisions
 
@@ -178,11 +192,11 @@ work of April, and everything after it moves up a month.
 ### July 2027: v0.9.0, widgets
 
 1. feat: an overlay layer in `Ui` for popups.
-2. feat: radio group.
-3. feat: slider.
-4. feat: progress bar.
+2. feat: radio group and toggle switch.
+3. feat: slider and number field.
+4. feat: progress bar and spinner.
 5. feat: dropdown.
-6. feat: tooltip.
+6. feat: tooltip and toast notifications.
 7. feat: tabs.
 8. feat: modal dialog.
 9. feat: image widget (`std/png`) and image drawing on every backend.
@@ -190,30 +204,32 @@ work of April, and everything after it moves up a month.
 
 ### August 2027: v0.10.0, lists and data
 
-1. feat: a virtual list that lays out only the visible rows.
+1. feat: a virtual list that lays out only the visible rows, benchmarked at
+   100,000 rows.
 2. feat: selection in lists (single and multiple, keyboard).
 3. feat: a table with columns.
 4. feat: resizable and sortable columns.
 5. feat: tree view.
 6. feat: split pane.
-7. feat: horizontal and two-axis scrolling.
-8. feat: smooth trackpad scrolling.
-9. bench: lists of 100,000 rows.
+7. feat: horizontal and two-axis scrolling, smooth trackpad scrolling.
+8. feat: date picker.
+9. feat: colour picker.
 10. example: a file-browser style app.
 
 ### September 2027: v0.11.0, app features
 
 1. feat: keyboard shortcuts.
-2. feat: menu bar (native on Windows and macOS).
-3. feat: context menus.
+2. feat: menu bar (native on Windows and macOS) and context menus.
+3. feat: toolbar and status bar.
 4. feat: multiple windows per process.
 5. feat: file open and save dialogs (native on Windows and macOS, SDL on
    Linux).
 6. feat: dropping files onto a window.
-7. feat: window options: minimum size, icon, title changes.
+7. feat: window options (minimum size, icon, title changes) and asking before
+   closing (`on_close` can cancel).
 8. feat: mouse cursors (I-beam over text, hand over links).
 9. feat: timers and an animation frame callback.
-10. feat: ask before closing (`on_close` can cancel).
+10. feat: a custom-drawing widget (an app draws on a `Canvas` itself).
 
 ### October 2027: v0.12.0, accessibility and packaging
 
