@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <a href="#quick-start">Quick start</a> ·
+  <a href="docs/quick-start.md">Quick start</a> ·
   <a href="#widgets">Widgets</a> ·
   <a href="#installation">Installation</a> ·
   <a href="ROADMAP.md">Roadmap</a> ·
@@ -48,34 +48,8 @@
 
 ## Quick start
 
-1. Install [iyi 0.20.0](#iyi-0200), and on Linux and macOS
-   [SDL3 + SDL3_ttf](#sdl3-and-sdl3_ttf).
-2. Add kilim to your `iyi.mod`:
-
-   ```
-   module example.com/app
-
-   require github.com/tuntii/kilim v0.1.3
-   ```
-
-   or run `iyi get github.com/tuntii/kilim@v0.1.3`.
-3. Write `main.iyi`:
-
-   ```crystal
-   import github.com/tuntii/kilim
-   import github.com/tuntii/kilim/kilim/widget::{Widget}
-
-   def main : Int32
-     count = Kilim.label("0")
-     n = 0
-     inc = Kilim.button("Increment", -> { n += 1; count.text = n.to_s; nil })
-     Kilim.window("Counter", 240, 120, Kilim.column([count, inc] of Widget, padding: 12, spacing: 8)).run
-     0
-   end
-
-   exit main
-   ```
-4. Run it with `iyi run main.iyi`.
+Install iyi, add one line to your `iyi.mod`, and a counter app is about ten
+lines of code: see the **[quick start](docs/quick-start.md)**.
 
 For a bigger example, see [`examples/todo.iyi`](examples/todo.iyi): a to-do
 list with a textbox, buttons, checkboxes, scrolling and Turkish text.
@@ -113,7 +87,7 @@ inside a `row`; inside a `column` it would grow vertically.
 **Types.** The widget types live in submodules (`kilim/label`,
 `kilim/button`, `kilim/box`, …). With only the package import, write them
 with their qualified names (`Kilim::Widget::Widget`). For short names, also
-import `github.com/tuntii/kilim/kilim/<name>::{Type}`, as the quick start does
+import `github.com/tuntii/kilim/kilim/<name>::{Type}`, as the [quick start](docs/quick-start.md) does
 for `Widget`.
 
 **Keyboard.** Tab and Shift+Tab move focus. In a textbox, use the arrow keys,
