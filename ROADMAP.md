@@ -4,9 +4,13 @@ kilim's goal is to be **the** GUI library for iyi: everything a desktop app
 needs, with widgets drawn by kilim itself, the same look on every platform,
 and a small declarative API in the spirit of V's `ui`.
 
-This is the plan for the twelve months from December 2026 to November 2027:
+This is the plan for the thirteen months from November 2026 to November 2027:
 **one release a month and about ten pull requests a month**, ending with
 **v1.0.0** in November 2027.
+
+The plan is driven by a real app: **pano**, a desktop project tracker with
+GitHub sync and an MCP server, built with kilim in its own repository. What
+pano needs and kilim lacks comes first.
 
 ## Where we are (v0.1.4)
 
@@ -39,7 +43,7 @@ This is the plan for the twelve months from December 2026 to November 2027:
 | Display | label (wrapping), image, progress bar, spinner, tooltip, toast |
 | Data | virtual list, table with resizable and sortable columns, tree view |
 | App | menu bar, context menus, toolbar, status bar, modal and file dialogs, multiple windows, keyboard shortcuts, file drop, cursors, timers and animation, a custom-drawing widget |
-| Text | selection, undo/redo, inline IME, Turkish, emoji and CJK |
+| Text | selection, undo/redo, inline IME, Turkish, emoji and CJK; font sizes and weights, styled text, a Markdown view |
 | Look | light, dark and high-contrast themes, following the system; rounded corners; per-widget styles |
 | Platforms | Windows, Linux and macOS on x86-64 and arm64; native backends on Windows and (if the spike works) macOS |
 | Quality | screen-reader support on Windows and macOS, packaging guides, API reference, tutorial, examples gallery |
@@ -63,7 +67,7 @@ This is the plan for the twelve months from December 2026 to November 2027:
 
 ## How releases work
 
-- **One minor release a month**, v0.2.0 in December 2026 to v0.12.0 in October
+- **One minor release a month**, v0.2.0 in November 2026 to v0.13.0 in October
   2027, then v1.0.0 in November 2027.
 - Work merges to `master` all month. The release is cut in the last week of
   the month, from whatever is on `master` and green. A planned item that is
@@ -82,26 +86,51 @@ This is the plan for the twelve months from December 2026 to November 2027:
 Each month lists about ten pull requests. The theme is fixed; the exact list
 can change as the work teaches us something.
 
-### December 2026: v0.2.0, fixes and release process
+### November 2026: v0.2.0, what a real app needs
 
-1. ci: run semantic-release on demand; `feat` makes a minor release again.
-2. ci: `macos-15` instead of the deprecated `macos-14`, a `permissions:`
-   block, Node 24 actions, cache the SDL build on Linux.
-3. fix: lay out before hit-testing when a frame is pending, so a batch of
+The first version of pano ships at the end of the month on top of this
+release.
+
+1. ci: `macos-15` instead of the removed `macos-14`.
+2. feat: timers (`Window#every`, `Window#after`) that wake the event loop.
+3. feat: background work: run a block off the UI thread and post its result
+   back (`Window#post`).
+4. feat: keyboard shortcuts at window level (Ctrl on Windows and Linux, Cmd
+   on macOS).
+5. feat: a list with a selected row, Up/Down keys and two-line rows truncated
+   with an ellipsis.
+6. feat: text selection in the text field: click to place the caret, drag,
+   Shift+arrows, Ctrl/Cmd+A; copy and cut act on the selection.
+7. feat: a multi-line text area: wrapping, vertical scrolling, Up/Down,
+   line-wise Home/End, selection, multi-line paste.
+8. feat: a dropdown, and the overlay layer for popups.
+9. feat: a modal confirmation dialog.
+10. fix: hover after scrolling and removal, Tab scrolls the focused widget
+    into view, the wheel goes to the parent at a scroll limit, no `on_change`
+    on programmatic `text=`; perf: binary search for hit-testing.
+11. ci: run semantic-release on demand, `feat` makes a minor release; release
+    v0.2.0.
+
+### December 2026: v0.3.0, fixes and what pano needs next
+
+1. ci: a `permissions:` block, Node 24 actions, cache the SDL build on Linux.
+2. fix: lay out before hit-testing when a frame is pending, so a batch of
    mouse events does not hit the previous layout.
-4. fix: recompute hover after scrolling and after a widget is removed.
-5. fix: Tab scrolls the newly focused widget into view.
-6. fix: a `Scroll` at its limit passes the wheel to its parent, so nested
-   scrolling works.
-7. fix(textbox): shrink `scroll_x` when text gets shorter, no `on_change` on
-   programmatic `text=`, filter control characters on paste.
-8. fix: keep the caret blinking while events arrive; key repeat does not
+3. fix(textbox): shrink `scroll_x` when text gets shorter, filter control
+   characters on paste.
+4. fix: keep the caret blinking while events arrive; key repeat does not
    toggle a checkbox again and again.
-9. perf: binary search for hit-testing in rows and columns.
+5. feat: drag and drop between widgets (for pano's board view).
+6. feat: double-click selects a word; word-wise caret movement
+   (Ctrl/Alt+arrows).
+7. feat: undo and redo in text fields and the text area.
+8. feat: labels wrap to their width.
+9. perf: the text area lays out only the visible lines, so long notes stay
+   fast.
 10. docs: recommend `--release` builds; README performance numbers for the
     native backend.
 
-### January 2027: v0.3.0, partial layout and redraw
+### January 2027: v0.4.0, partial layout and redraw
 
 1. bench: count idle wake-ups per second.
 2. ci: benchmark regression gate (median of several runs, agreed threshold).
@@ -116,7 +145,7 @@ can change as the work teaches us something.
 9. test: invalidation and dirty-rectangle tests for every widget.
 10. docs: a performance guide for app authors.
 
-### February 2027: v0.4.0, five platforms in CI and the macOS spike
+### February 2027: v0.5.0, five platforms in CI and the macOS spike
 
 1. ci: Linux arm64 spike, one program cross-compiled, linked and run
    ([#1](https://github.com/Tuntii/kilim/issues/1)).
@@ -133,7 +162,7 @@ can change as the work teaches us something.
    without `close` no longer leaves a dangling event-watch pointer.
 10. docs: a platform support table.
 
-### March 2027: v0.5.0, native macOS backend
+### March 2027: v0.6.0, native macOS backend
 
 If the February spike failed, macOS stays on SDL, this month starts the text
 work of April, and everything after it moves up a month.
@@ -149,34 +178,35 @@ work of April, and everything after it moves up a month.
 9. test(macos): `smoke_macos`, the to-do selftest and benchmarks in CI.
 10. docs: the macOS backend, and `-Dsdl` as the fallback.
 
-### April 2027: v0.6.0, text editing
+### April 2027: v0.7.0, text input complete
 
-1. feat: a selection in the text-editing model.
-2. feat: click to place the caret.
-3. feat: select by dragging the mouse.
-4. feat: Shift+arrows, Home/End and Ctrl/Cmd+A extend or select.
-5. feat: copy and cut act on the selection.
-6. feat: double-click selects a word.
-7. feat: word-wise caret movement (Ctrl/Alt+arrows).
-8. feat: undo and redo.
-9. feat(win32): inline IME composition (the text being composed is drawn in
+1. feat(win32): inline IME composition (the text being composed is drawn in
    the field).
-10. feat(sdl, macos): inline IME composition.
-
-### May 2027: v0.7.0, multi-line text
-
-1. feat: line breaking in text measurement.
-2. feat: labels wrap to their width.
-3. feat: a multi-line text area (model and drawing).
-4. feat(text area): vertical scrolling, Up/Down, line-wise Home/End.
-5. feat(text area): selection, copy, cut, paste.
-6. perf(text area): long documents stay fast (only visible lines laid out).
-7. feat: a password field.
-8. feat: maximum length and read-only text fields.
-9. test: text editing on every backend, including Turkish and emoji.
+2. feat(sdl, macos): inline IME composition.
+3. feat: a password field.
+4. feat: maximum length and read-only text fields.
+5. feat: find in a text area (next and previous match).
+6. feat: Tab and indentation in the text area.
+7. feat: a monospace font option for text fields and areas.
+8. bench: a text area with 10,000 lines.
+9. test: text editing on every backend, including Turkish, emoji and CJK.
 10. docs: a text-input guide.
 
-### June 2027: v0.8.0, layout and theming
+### May 2027: v0.8.0, rich text
+
+1. feat: font sizes and weights in `Canvas` on every backend.
+2. feat: styled text spans (bold, italic, colour, monospace).
+3. feat: a rich label that wraps styled spans.
+4. feat: links in rich text (click, hover cursor, keyboard).
+5. feat: a Markdown view (headings, lists, emphasis, code, links), for pano's
+   notes.
+6. feat: selection and copy in rich text and the Markdown view.
+7. feat: bold and italic Noto Sans embedded next to the regular face.
+8. perf: cache laid-out rich text.
+9. test: rich text on every backend.
+10. example: a Markdown viewer.
+
+### June 2027: v0.9.0, layout and theming
 
 1. feat: cross-axis alignment (start, centre, end, stretch).
 2. feat: minimum and maximum sizes.
@@ -189,7 +219,7 @@ work of April, and everything after it moves up a month.
 9. feat: per-widget style overrides.
 10. docs: a theming guide.
 
-### July 2027: v0.9.0, widgets
+### July 2027: v0.10.0, widgets
 
 1. feat: an overlay layer in `Ui` for popups.
 2. feat: radio group and toggle switch.
@@ -202,7 +232,7 @@ work of April, and everything after it moves up a month.
 9. feat: image widget (`std/png`) and image drawing on every backend.
 10. example: a widget gallery.
 
-### August 2027: v0.10.0, lists and data
+### August 2027: v0.11.0, lists and data
 
 1. feat: a virtual list that lays out only the visible rows, benchmarked at
    100,000 rows.
@@ -216,7 +246,7 @@ work of April, and everything after it moves up a month.
 9. feat: colour picker.
 10. example: a file-browser style app.
 
-### September 2027: v0.11.0, app features
+### September 2027: v0.12.0, app features
 
 1. feat: keyboard shortcuts.
 2. feat: menu bar (native on Windows and macOS) and context menus.
@@ -231,7 +261,7 @@ work of April, and everything after it moves up a month.
 9. feat: timers and an animation frame callback.
 10. feat: a custom-drawing widget (an app draws on a `Canvas` itself).
 
-### October 2027: v0.12.0, accessibility and packaging
+### October 2027: v0.13.0, accessibility and packaging
 
 1. docs: accessibility design (roles, names, focus, actions).
 2. feat(win32): UI Automation for basic widgets.
