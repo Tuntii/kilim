@@ -145,7 +145,8 @@ pub class Textbox < Widget
       when Key::X
         return false unless e.mods.primary
         return true unless @edit.selection
-        ui.clipboard.set(@edit.selected_text)
+        # The text goes only once the clipboard holds it.
+        return true unless ui.clipboard.set(@edit.selected_text)
         @edit.delete_selection
       when Key::A
         return false unless e.mods.primary

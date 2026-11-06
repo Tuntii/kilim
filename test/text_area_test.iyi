@@ -173,6 +173,14 @@ def main : Int32
   key(ui, Key::C, primary: true)
   expect_eq mem.get, "aaaa bbbb cccc", "Shift+Down on the last line selects to the end"
 
+  # A clipboard that refuses the text (another program holds it): the cut keeps the text.
+  ta.text = "keep\nme"
+  key(ui, Key::A, primary: true)
+  mem.fail = true
+  key(ui, Key::X, primary: true)
+  mem.fail = false
+  expect_eq ta.text, "keep\nme", "a failed clipboard write cuts nothing"
+
   puts "text area ok"
   0
 end

@@ -91,6 +91,12 @@ def main : Int32
   key(ui3, Key::X, true)
   expect_eq mem.get, "bcX", "drag from 1 to 4 selects 3 characters; primary+X cuts them"
   expect_eq tb3.text, "adefgh", "cut removes the selection"
+  # A clipboard that refuses the text (another program holds it): the cut keeps the text.
+  key(ui3, Key::A, true)
+  mem.fail = true
+  key(ui3, Key::X, true)
+  mem.fail = false
+  expect_eq tb3.text, "adefgh", "a failed clipboard write cuts nothing"
   mem.set("zz")
   key(ui3, Key::A, true)
   ui3.dispatch TextInput.new("q")
