@@ -49,6 +49,12 @@ pub class Ui < Context
   # After a font size or pixel density change: every widget measures again.
   pub def drop_caches : Nil
     @root.drop_caches
+    if m = @modal
+      m.drop_caches
+    end
+    if o = @overlay
+      o.drop_caches
+    end
     @root.needs_frame = true
   end
 

@@ -11,6 +11,8 @@ import kilim/box::*
 import kilim/label::{Label}
 import kilim/scroll::{Scroll}
 import kilim/ui::{Ui}
+import kilim/text_area::{TextArea}
+import kilim/theme::*
 import kilim/testing::*
 
 # RecordCanvas that counts measure calls and can change its character width.
@@ -93,6 +95,29 @@ def main : Int32
   expect ui.needs_frame?, "drop_caches requests a frame"
   ui.frame
   expect_eq list.cached_preferred(rc).w, 9 * 10_f32, "measured again after drop_caches"
+
+  # Dropping caches reaches the overlay and the modal, and rewraps a text area at the same width.
+  rc.char_w = 8_f32
+  ta = TextArea.new("", "aaaa bbbb cccc")
+  ui2 = Ui.new(Box.new(Axis::Column, [ta] of Widget), rc, MemoryClipboard.new)
+  ui2.resize(10 * 8 + 2 * PADDING, 300_f32)
+  pop = Box.new(Axis::Column, [Label.new("popup")] of Widget)
+  ui2.show_overlay(pop, Rect.new(0_f32, 0_f32, 10_f32, 10_f32))
+  ui2.frame
+  expect texts(rc).any? { |t| t.ends_with?(",cccc") }, "10 characters per line: the text wraps"
+  rc.char_w = 4_f32
+  ui2.drop_caches
+  rc.calls.clear
+  ui2.frame
+  expect_eq pop.cached_preferred(rc).w, 5 * 4_f32, "the overlay is measured again"
+  expect texts(rc).any? { |t| t.ends_with?(",aaaa bbbb cccc") }, "the text area rewraps at the same width"
+  dlg = Box.new(Axis::Column, [Label.new("dialog")] of Widget)
+  ui2.show_modal(dlg)
+  ui2.frame
+  rc.char_w = 8_f32
+  ui2.drop_caches
+  ui2.frame
+  expect_eq dlg.cached_preferred(rc).w, 6 * 8_f32, "the modal is measured again"
 
   puts "cache ok"
   0

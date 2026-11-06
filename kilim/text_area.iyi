@@ -70,6 +70,12 @@ pub class TextArea < Widget
     clamp
   end
 
+  # A new font measures differently at the same width: the next layout rewraps from scratch.
+  pub def drop_caches : Nil
+    super
+    @wrap_w = -1_f32
+  end
+
   def text_w : Float32
     w = @bounds.w - 2 * PADDING
     w > 0 ? w : 0_f32
