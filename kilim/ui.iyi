@@ -69,6 +69,15 @@ pub class Ui < Context
     hide_overlay
     @modal_prev = @focused
     @modal = w
+    # Nothing behind the modal keeps input: a drag in progress ends, hover and focus move into the modal.
+    if c = @captured
+      c.pressed = false
+      @captured = nil
+    end
+    set_hover(nil)
+    order = [] of Widget
+    collect(w, order)
+    focus(order.empty? ? nil : order.first)
     @root.needs_frame = true
   end
 

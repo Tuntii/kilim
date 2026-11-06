@@ -9,6 +9,7 @@ import kilim/widget::*
 import kilim/box::*
 import kilim/ui::{Ui}
 import kilim/button::{Button}
+import kilim/label::{Label}
 import kilim/textbox::{Textbox}
 import kilim/dropdown::{Dropdown}
 import kilim/testing::*
@@ -227,6 +228,36 @@ def main : Int32
   f.confirm
   expect f.ui.overlay.nil?, "the modal hides the root's popup"
 
+  # a modal without focusable children takes focus away from the root
+  f = Fixture.new
+  submitted = 0
+  tb = Textbox.new("t", "", nil, ->(t : String) { submitted += 1; nil })
+  f.box.add(tb)
+  f.ui.frame
+  f.ui.focus(tb)
+  f.ui.show_modal(Box.new(Axis::Column, [Label.new("Hi")] of Widget))
+  f.ui.frame
+  expect f.ui.focused.nil?, "a bare modal clears focus"
+  f.ui.dispatch TextInput.new("abc")
+  key(f.ui, Key::Enter)
+  expect_eq tb.text, "", "typing does not reach the root textbox"
+  expect_eq submitted, 0, "Enter does not submit the root textbox"
+  f.ui.close_modal
+  expect f.ui.focused == tb, "focus back on the textbox"
+
+  # a drag in progress when the modal opens does not finish on the root widget
+  f = Fixture.new
+  bx = f.behind.bounds.x + 2_f32
+  by = f.behind.bounds.y + 2_f32
+  f.ui.dispatch MouseMove.new(bx, by)
+  f.ui.dispatch MouseDown.new(bx, by, MouseButton::Left)
+  f.ui.show_modal(Box.new(Axis::Column, [Label.new("Hi")] of Widget))
+  f.ui.frame
+  f.ui.dispatch MouseUp.new(bx, by, MouseButton::Left)
+  expect_eq f.log.deletes, 0, "MouseUp after show_modal does not click the root button"
+  expect !f.behind.pressed, "the root button is no longer pressed"
+  expect f.ui.hovered.nil?, "nothing under a modal stays hovered"
+
   # draw order: root, scrim, modal
   f = Fixture.new
   cv = RecordCanvas.new
@@ -236,9 +267,15 @@ def main : Int32
   n = cv.calls.size
   ui.show_modal(Box.new(Axis::Column, [Button.new("Only")] of Widget))
   ui.frame
-  scrim = cv.calls[n..].index("fill 0.0,0.0,400.0,300.0")
+  scrim = cv.calls[n..].rindex("fill 0.0,0.0,400.0,300.0")
   expect_eq cv.calls[n..].count { |c| c == "fill 0.0,0.0,400.0,300.0" }, 2, "background and scrim cover the window"
   expect !scrim.nil?, "scrim drawn"
+  after = cv.calls[n..]
+  si = scrim.as(Int32)
+  root_i = after.index { |c| c.ends_with?(",Behind") }
+  modal_i = after.index { |c| c.ends_with?(",Only") }
+  expect !root_i.nil? && !modal_i.nil?, "both the root and the modal drew"
+  expect root_i.as(Int32) < si && si < modal_i.as(Int32), "order is root, scrim, modal"
 
   # a long message is cut to fit
   f = Fixture.new
