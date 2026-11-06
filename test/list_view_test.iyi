@@ -119,6 +119,51 @@ def main : Int32
   expect sc.offset > 0_f32, "scroll followed the selection"
   expect r >= sc.bounds.y && r + 40 <= sc.bounds.y + sc.bounds.h, "selected row inside the viewport"
 
+  # test_page_with_scrolling: 100 rows of 40 in a viewport of 100
+  many = [] of ListRow
+  100.times { |i| many << ListRow.new("Task #{i}", "detail", key: "k#{i}") }
+  lv = ListView.new
+  lv.rows = many
+  sc = Scroll.new(lv)
+  sc.sizing = Sizing.fixed(100_f32)
+  ui = Ui.new(Box.new(Axis::Column, [sc] of Widget), RecordCanvas.new, MemoryClipboard.new)
+  ui.resize(300_f32, 100_f32)
+  ui.frame
+  ui.focus(lv)
+  key ui, Key::Down
+  expect_eq lv.selected, 0, "first row"
+  key ui, Key::PageDown
+  expect_eq lv.selected, 2, "PageDown: row at top + viewport (y 100 is in row 2)"
+  r = lv.bounds.y + 2 * 40
+  expect r >= sc.bounds.y && r + 40 <= sc.bounds.y + sc.bounds.h, "page target revealed"
+  key ui, Key::PageDown
+  expect_eq lv.selected, 4, "second PageDown"
+  r = lv.bounds.y + 4 * 40
+  expect r >= sc.bounds.y && r + 40 <= sc.bounds.y + sc.bounds.h, "second target revealed"
+  key ui, Key::PageUp
+  expect_eq lv.selected, 1, "PageUp goes back about a viewport"
+  key ui, Key::PageUp
+  expect_eq lv.selected, 0, "PageUp clamps at the first row"
+  key ui, Key::PageUp
+  expect_eq lv.selected, 0, "PageUp at the top stays"
+
+  # test_selected_assign_checked
+  lv, ui, picked = build(sample)
+  lv.selected = 99
+  expect lv.selected.nil?, "out of range ignored"
+  lv.selected = 0
+  expect lv.selected.nil?, "header ignored"
+  lv.selected = 2
+  lv.selected = -1
+  expect_eq lv.selected, 2, "negative ignored"
+  lv.rows = [ListRow.new("Only", key: "b")]
+  expect_eq lv.selected, 0, "rows= after selected= keeps the key and does not raise"
+  expect_eq picked.size, 0, "selected= never calls back"
+
+  # test_ellipsize_unicode
+  expect_eq ellipsize(rc, "İstanbul çğıöşü 😀😀", 96_f32), "İstanbul çğ…", "cut inside Turkish letters"
+  expect_eq ellipsize(rc, "ab😀😀cd", 40_f32), "ab😀😀…", "cut right after an emoji"
+
   puts "list_view_test OK"
   0
 end

@@ -25,17 +25,30 @@ end
 # s cut with a trailing "…" so that it fits width; unchanged if it already fits.
 pub def ellipsize(c : Canvas, s : String, width : Float32) : String
   return s if c.measure(s).w <= width
+  # Cut on characters, never inside a multi-byte one.
+  chars = [] of Char
+  s.each_char { |ch| chars << ch }
   lo = 0
-  hi = s.size
+  hi = chars.size
   while lo < hi
     mid = (lo + hi + 1) // 2
-    if c.measure(s[0, mid] + "…").w <= width
+    if c.measure(join_chars(chars, mid) + "…").w <= width
       lo = mid
     else
       hi = mid - 1
     end
   end
-  s[0, lo] + "…"
+  join_chars(chars, lo) + "…"
+end
+
+def join_chars(chars : Array(Char), n : Int32) : String
+  String.build do |b|
+    i = 0
+    while i < n
+      b << chars[i]
+      i += 1
+    end
+  end
 end
 
 pub class ListView < Widget
@@ -66,8 +79,11 @@ pub class ListView < Widget
     invalidate
   end
 
-  # Programmatic selection; does not call on_select.
+  # Programmatic selection; does not call on_select. Out-of-range indexes and headers are ignored.
   pub def selected=(i : Int32?) : Nil
+    if j = i
+      return if j < 0 || j >= @rows.size || @rows[j].header
+    end
     @selected = i
     invalidate
   end
