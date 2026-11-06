@@ -195,8 +195,26 @@ def main : Int32
   fail("label has #{ink} dark pixels, expected text") unless ink > 50
   puts "pixels: ok (label ink #{ink})"
 
-  # run's loop must end on WM_CLOSE (and close the window).
-  post(win, WM_CLOSE, 0_u64, 0_i64)
+  # Timers: a repeating timer ticks while the loop steps, and stops once cancelled.
+  ticks = 0
+  id = win.every(10) { ticks += 1; nil }
+  t0 = LibWin.GetTickCount64
+  while ticks < 2 && LibWin.GetTickCount64 - t0 < 200_u64
+    win.step
+  end
+  fail("timer ran #{ticks} times in 200 ms, expected at least 2") if ticks < 2
+  win.cancel_timer(id)
+  seen = ticks
+  t0 = LibWin.GetTickCount64
+  while LibWin.GetTickCount64 - t0 < 50_u64
+    win.step
+  end
+  fail("timer ran #{ticks - seen} more times after cancel_timer") unless ticks == seen
+  puts "timers: ok (#{seen} ticks)"
+
+  # run's loop must end on WM_CLOSE (and close the window); a timer sends it, which
+  # also shows a timer wakes a loop that would otherwise wait forever.
+  win.after(30) { post(win, WM_CLOSE, 0_u64, 0_i64); nil }
   win.run
   puts "smoke ok"
   0

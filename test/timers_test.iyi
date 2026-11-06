@@ -1,0 +1,126 @@
+# Timers: scheduling, repeating, cancelling and re-entrancy, with a fake clock.
+
+module test/timers_test
+
+import kilim/timers::{Timers, Pacer}
+import kilim/theme::{BLINK_MS}
+import kilim/testing::*
+
+class Count
+  property n = 0
+end
+
+def main : Int32
+  # A repeating timer: due after its interval, then again one interval later.
+  t = Timers.new
+  c = Count.new
+  t.add(100, true, 0_i64) { c.n += 1; nil }
+  expect_eq t.next_in(0_i64), 100, "next_in right after add"
+  expect_eq t.fire(99_i64), false, "not due at 99"
+  expect_eq c.n, 0, "not run at 99"
+  expect_eq t.fire(100_i64), true, "due at 100"
+  expect_eq c.n, 1, "ran once"
+  expect_eq t.next_in(100_i64), 100, "rescheduled"
+
+  # A one-shot timer fires once and leaves nothing behind.
+  t = Timers.new
+  c = Count.new
+  t.add(50, false, 0_i64) { c.n += 1; nil }
+  expect_eq t.fire(50_i64), true, "one-shot due at 50"
+  expect_eq t.fire(500_i64), false, "one-shot is gone"
+  expect_eq c.n, 1, "one-shot ran once"
+  expect t.next_in(50_i64).nil?, "no timers: next_in is nil"
+
+  # next_in is never negative for an overdue timer.
+  t = Timers.new
+  t.add(10, false, 0_i64) { nil }
+  expect_eq t.next_in(90_i64), 0, "overdue: next_in 0"
+
+  # cancel before it is due.
+  t = Timers.new
+  c = Count.new
+  id = t.add(10, true, 0_i64) { c.n += 1; nil }
+  t.cancel(id)
+  expect_eq t.fire(10_i64), false, "cancelled timer does not run"
+  expect t.next_in(0_i64).nil?, "cancelled timer is gone"
+
+  # A block that cancels its own timer does not run again.
+  t = Timers.new
+  c = Count.new
+  me = Count.new
+  me.n = t.add(10, true, 0_i64) { c.n += 1; t.cancel(me.n); nil }
+  t.fire(10_i64)
+  t.fire(20_i64)
+  expect_eq c.n, 1, "self-cancel stops the repeat"
+
+  # A block can cancel another timer that is due in the same fire.
+  t = Timers.new
+  c = Count.new
+  other = Count.new
+  t.add(10, false, 0_i64) { t.cancel(other.n); nil }
+  other.n = t.add(10, false, 0_i64) { c.n += 1; nil }
+  t.fire(10_i64)
+  expect_eq c.n, 0, "a timer cancelled by an earlier one in the same fire does not run"
+
+  # A block may add a timer: it does not run in the current fire, only at its own time.
+  t = Timers.new
+  c = Count.new
+  t.add(10, false, 0_i64) { t.add(5, false, 10_i64) { c.n += 1; nil }; nil }
+  t.fire(10_i64)
+  expect_eq c.n, 0, "added timer does not run in the same fire"
+  expect_eq t.next_in(10_i64), 5, "added timer is due at its own time"
+  expect_eq t.fire(15_i64), true, "added timer fires"
+  expect_eq c.n, 1, "added timer ran"
+
+  # After a long pause a repeating timer runs once, not once per missed interval.
+  t = Timers.new
+  c = Count.new
+  t.add(100, true, 0_i64) { c.n += 1; nil }
+  t.fire(1000_i64)
+  expect_eq c.n, 1, "one run after a long pause"
+  expect_eq t.next_in(1000_i64), 100, "rescheduled from the fire time"
+
+  # A zero interval is clamped, so a repeating timer is never due twice at the same time.
+  t = Timers.new
+  c = Count.new
+  t.add(0, true, 0_i64) { c.n += 1; nil }
+  expect_eq t.next_in(0_i64), 1, "zero interval is clamped to 1"
+  t.fire(5_i64)
+  expect_eq t.next_in(5_i64), 1, "clamped timer waits before the next run"
+
+  # Pacer: nothing pending and no text input means wait forever.
+  p = Pacer.new
+  expect_eq p.wait_ms(0_i64, false), -1, "infinite wait with nothing to do"
+
+  # Text input alone: wake for the blink, and blink only when it is due.
+  expect_eq p.wait_ms(0_i64, true), BLINK_MS, "wait for the blink"
+  expect p.blink?(BLINK_MS.to_i64, true, true), "blink at the deadline"
+  expect_eq p.wait_ms(BLINK_MS.to_i64, true), BLINK_MS, "next blink one interval later"
+
+  # With a 100 ms repeating timer: timer wakes do not blink, the blink keeps its cadence.
+  p = Pacer.new
+  c = Count.new
+  p.timers.add(100, true, 0_i64) { c.n += 1; nil }
+  now = 0_i64
+  blinks = 0
+  while now < 2 * BLINK_MS
+    w = p.wait_ms(now, true)
+    expect w >= 0 && w <= 100, "wake within 100 ms (#{w})"
+    now += w
+    blinks += 1 if p.blink?(now, true, true)
+    p.timers.fire(now)
+  end
+  expect_eq blinks, 2, "two blinks in two intervals, not one per timer wake"
+  expect c.n >= 10, "the timer kept running (#{c.n})"
+
+  # Input restarts the blink deadline.
+  p = Pacer.new
+  p.wait_ms(0_i64, true)
+  expect !p.blink?(BLINK_MS.to_i64 - 10, true, false), "input wake does not blink"
+  expect_eq p.wait_ms(BLINK_MS.to_i64 - 10, true), BLINK_MS, "deadline restarted by input"
+
+  puts "timers ok"
+  0
+end
+
+exit main

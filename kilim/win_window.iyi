@@ -12,6 +12,7 @@ import kilim/clipboard::{Clipboard}
 import kilim/event::*
 import kilim/widget::{Widget}
 import kilim/ui::{Ui}
+import kilim/timers::{Pacer}
 import kilim/theme::*
 
 CLASS_NAME = wide("kilim")
@@ -38,6 +39,7 @@ pub class WinWindow
     @quit = false
     @closed = false
     @text_input = false
+    @pacer = Pacer.new
     @high_surrogate = 0_u16
     # Every ivar must be filled before handing out self. The box lives in this ivar:
     # the window's only other copy is GWLP_USERDATA, invisible to the GC.
@@ -91,10 +93,12 @@ pub class WinWindow
   pub def run : Nil
     present
     until @quit
-      timeout = @ui.wants_text_input? ? BLINK_MS.to_u32 : INFINITE
-      if LibWin.MsgWaitForMultipleObjectsEx(0_u32, null, timeout, QS_ALLINPUT, MWMO_INPUTAVAILABLE) == WAIT_TIMEOUT
-        @ui.blink
-      end
+      wait = @pacer.wait_ms(clock_ms, @ui.wants_text_input?)
+      timeout = wait < 0 ? INFINITE : wait.to_u32
+      idle = LibWin.MsgWaitForMultipleObjectsEx(0_u32, null, timeout, QS_ALLINPUT, MWMO_INPUTAVAILABLE) == WAIT_TIMEOUT
+      now = clock_ms
+      @ui.blink if @pacer.blink?(now, @ui.wants_text_input?, idle)
+      @pacer.timers.fire(now)
       drain
       present
     end
@@ -103,8 +107,27 @@ pub class WinWindow
 
   # Drains the queue without waiting and draws a frame if needed.
   pub def step : Nil
+    @pacer.timers.fire(clock_ms)
     drain
     present
+  end
+
+  # Runs the block every ms milliseconds on the event loop (no threads); returns an id for cancel_timer.
+  pub def every(ms : Int32, &fn : -> Nil) : Int32
+    @pacer.timers.add(ms, true, clock_ms, &fn)
+  end
+
+  # Runs the block once, ms milliseconds from now; returns an id for cancel_timer.
+  pub def after(ms : Int32, &fn : -> Nil) : Int32
+    @pacer.timers.add(ms, false, clock_ms, &fn)
+  end
+
+  pub def cancel_timer(id : Int32) : Nil
+    @pacer.timers.cancel(id)
+  end
+
+  def clock_ms : Int64
+    LibWin.GetTickCount64.unsafe_to_i64
   end
 
   pub def inject(e : Event) : Nil
@@ -333,6 +356,7 @@ pub class WinWindow
   @quit : Bool
   @closed : Bool
   @text_input : Bool
+  @pacer : Pacer
   @high_surrogate : UInt16
   @box : Void*
 end
