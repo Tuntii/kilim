@@ -8,6 +8,7 @@ import kilim/widget::*
 import kilim/box::*
 import kilim/ui::{Ui}
 import kilim/button::{Button}
+import kilim/scroll::{Scroll}
 import kilim/dropdown::{Dropdown}
 import kilim/testing::*
 
@@ -135,9 +136,42 @@ def main : Int32
   ui.frame
   click(ui, d)
   ui.frame
+  expect !ui.overlay.nil?, "open near the bottom"
   if o = ui.overlay
     expect o.bounds.y + o.bounds.h <= d.bounds.y, "popup flipped above"
   end
+
+  # a wheel hides the popup (it would be left behind by the scrolling list) and is swallowed
+  log = Log.new
+  d = Dropdown.new(["a", "b", "c"], 0, ->(i : Int32) { log.picks << i; nil })
+  pad = Box.new(Axis::Column, [] of Widget, sizing: Sizing.fixed(400_f32))
+  sc = Scroll.new(Box.new(Axis::Column, [d, pad] of Widget))
+  ui = Ui.new(sc, RecordCanvas.new, MemoryClipboard.new)
+  ui.resize(300_f32, 200_f32)
+  ui.frame
+  click(ui, d)
+  ui.frame
+  expect !ui.overlay.nil?, "open inside a scroll"
+  ui.dispatch Wheel.new(150_f32, 150_f32, -1_f32)
+  expect ui.overlay.nil?, "wheel hides the overlay"
+  expect log.picks.empty? && d.selected == 0, "wheel changes no selection"
+  click(ui, d)
+  ui.frame
+  if o = ui.overlay
+    ui.dispatch Wheel.new(o.bounds.x + 5, o.bounds.y + 5, -1_f32)
+  end
+  expect ui.overlay.nil?, "wheel over the popup hides it too"
+
+  # a resize hides the popup
+  log = Log.new
+  col, d, ui = setup(log)
+  click(ui, d)
+  expect !ui.overlay.nil?, "open before resize"
+  ui.resize(200_f32, 200_f32)
+  expect ui.overlay.nil?, "Ui#resize hides the overlay"
+  click(ui, d)
+  ui.dispatch Resize.new(250_f32, 200_f32)
+  expect ui.overlay.nil?, "Resize event hides the overlay"
 
   puts "dropdown ok"
   0

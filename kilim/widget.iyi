@@ -172,7 +172,7 @@ pub abstract class Context
   # The popup currently shown above the root, if any (one at a time).
   pub abstract def overlay : Widget?
   # Shows w above everything, at the bottom-left of `below` (above it if that would leave the window).
-  # A click outside it, or Escape, hides it; the click does not reach the widget under it.
+  # A click outside it, Escape, a Wheel or a resize hides it; the click or wheel does not go further.
   pub abstract def show_overlay(w : Widget, below : Rect) : Nil
   pub abstract def hide_overlay : Nil
 end

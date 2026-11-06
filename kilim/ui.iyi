@@ -40,6 +40,8 @@ pub class Ui < Context
   pub def resize(w : Float32, h : Float32) : Nil
     @w = w
     @h = h
+    # The popup is anchored to a rect that the new layout moves.
+    hide_overlay
     @root.needs_frame = true
   end
 
@@ -199,7 +201,12 @@ pub class Ui < Context
       end
     when Wheel
       remember(e.x, e.y)
-      bubble(@root.hit(e.x, e.y), e)
+      if @overlay
+        # Scrolling would leave the popup behind its owner: close it, and swallow the wheel.
+        hide_overlay
+      else
+        bubble(@root.hit(e.x, e.y), e)
+      end
     when KeyDown, TextInput
       if e.is_a?(KeyDown) && e.key.escape? && @overlay
         hide_overlay
