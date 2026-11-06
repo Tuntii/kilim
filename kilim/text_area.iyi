@@ -18,8 +18,8 @@ pub class TextArea < Widget
 
   def initialize(@placeholder : String = "", text : String = "", @on_change : (String -> Nil)? = nil)
     @edit = TextEdit.new
-    @edit.set(text)
-    @last = text
+    @edit.set(lf(text))
+    @last = @edit.text
     @sizing = Sizing.fill
   end
 
@@ -27,9 +27,9 @@ pub class TextArea < Widget
     @edit.text
   end
 
-  # Not a user edit: no on_change.
+  # Not a user edit: no on_change. Line breaks become "\n", as in a paste.
   pub def text=(s : String) : Nil
-    @edit.set(s)
+    @edit.set(lf(s))
     @last = @edit.text
     @upstream = false
     @want_x = nil
@@ -145,7 +145,10 @@ pub class TextArea < Widget
   pub def caret_rect : Rect?
     if c = @canvas
       k = caret_line
-      return Rect.new(@bounds.x + PADDING + x_in(k, @edit.cursor, c), line_y(k), 1_f32, @lh)
+      # Spaces hang past the edge of a full line; the caret stays at the edge, visible.
+      x = x_in(k, @edit.cursor, c)
+      x = text_w if x > text_w
+      return Rect.new(@bounds.x + PADDING + x, line_y(k), 1_f32, @lh)
     end
     nil
   end

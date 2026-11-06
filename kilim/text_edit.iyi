@@ -35,10 +35,11 @@ pub class TextEdit
 
   pub def insert(s : String) : Nil
     delete_selection
-    s.each_char do |ch|
-      @chars.insert(@cursor, ch)
-      @cursor += 1
-    end
+    # One splice: inserting character by character is O(n²) for a large paste.
+    add = [] of Char
+    s.each_char { |ch| add << ch }
+    @chars[@cursor, 0] = add
+    @cursor += add.size
   end
 
   pub def backspace : Nil
@@ -96,7 +97,7 @@ pub class TextEdit
     s = selection
     @anchor = nil
     return false unless s
-    (s[1] - s[0]).times { @chars.delete_at(s[0]) }
+    @chars[s[0], s[1] - s[0]] = [] of Char
     @cursor = s[0]
     true
   end

@@ -134,6 +134,45 @@ def main : Int32
   key(ui, Key::C, primary: true)
   expect_eq mem.get, "bc\ndX", "drag from line 1 to line 2 selects across the newline"
 
+  # Spaces typed at the end of a full line hang past the edge; the caret stays at the edge.
+  ta.text = "abcdefghij"
+  ui.dispatch TextInput.new("  ")
+  if r = ta.caret_rect
+    expect_eq r.x, x0 + 80, "caret x is clamped to the text width"
+  end
+
+  # text= normalises line breaks like paste does.
+  ta.text = "a\r\nb\rc"
+  expect_eq ta.text, "a\nb\nc", "text= turns CRLF and CR into LF"
+
+  # Never lose text: joining paragraphs, replacing a selection across a newline and a soft wrap.
+  ta.text = "ab\ncd"
+  key(ui, Key::Home)
+  key(ui, Key::Backspace)
+  expect_eq ta.text, "abcd", "Backspace at a paragraph's start joins it to the one above"
+  ta.text = "ab\ncd"
+  key(ui, Key::Up)
+  key(ui, Key::Delete)
+  expect_eq ta.text, "abcd", "Delete at a paragraph's end joins the next one"
+  ta.text = "aaaa bbbb cccc\nxyz"
+  ui.frame
+  ui.dispatch MouseDown.new(x0 + 7 * 8 + 1, y0 + 4, MouseButton::Left)
+  ui.dispatch MouseMove.new(x0 + 8 + 1, y0 + 32 + 4)
+  ui.dispatch MouseUp.new(x0 + 8 + 1, y0 + 32 + 4, MouseButton::Left)
+  ui.dispatch TextInput.new("Q")
+  expect_eq ta.text, "aaaa bbQyz", "typing replaces exactly the selected range"
+
+  # Shift+Down extends the selection by one visual line, then to the end.
+  ta.text = "aaaa bbbb cccc"
+  key(ui, Key::Up)
+  key(ui, Key::Home)
+  key(ui, Key::Down, shift: true)
+  key(ui, Key::C, primary: true)
+  expect_eq mem.get, "aaaa bbbb ", "Shift+Down selects the first visual line"
+  key(ui, Key::Down, shift: true)
+  key(ui, Key::C, primary: true)
+  expect_eq mem.get, "aaaa bbbb cccc", "Shift+Down on the last line selects to the end"
+
   puts "text area ok"
   0
 end
