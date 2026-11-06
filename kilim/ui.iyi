@@ -25,6 +25,7 @@ pub class Ui < Context
   getter captured : Widget? = nil
   getter focused : Widget? = nil
   getter clipboard : Clipboard
+  getter overlay : Widget? = nil
 
   def initialize(@root : Widget, @canvas : Canvas, @clipboard : Clipboard)
     @shortcuts = [] of Shortcut
@@ -49,21 +50,71 @@ pub class Ui < Context
   end
 
   pub def needs_frame? : Bool
-    @root.needs_frame
+    return true if @root.needs_frame
+    if o = @overlay
+      return o.needs_frame
+    end
+    false
+  end
+
+  pub def show_overlay(w : Widget, below : Rect) : Nil
+    hide_overlay
+    @overlay = w
+    @anchor = below
+    @root.needs_frame = true
+  end
+
+  pub def hide_overlay : Nil
+    if o = @overlay
+      o.needs_frame = false
+      @overlay = nil
+      @root.needs_frame = true
+      # Hover/capture inside it are dropped by sanitize.
+    end
+  end
+
+  # The overlay is on top, so it is asked first.
+  def hit_at(x : Float32, y : Float32) : Widget?
+    if o = @overlay
+      if h = o.hit(x, y)
+        return h
+      end
+    end
+    @root.hit(x, y)
+  end
+
+  def layout_overlay : Nil
+    return unless o = @overlay
+    s = o.cached_preferred(@canvas)
+    a = @anchor
+    w = s.w > a.w ? s.w : a.w
+    y = a.y + a.h
+    y = a.y - s.h if y + s.h > @h && a.y - s.h >= 0
+    x = a.x
+    x = @w - w if x + w > @w
+    x = 0_f32 if x < 0
+    o.layout(Rect.new(x, y, w, s.h), @canvas)
   end
 
   # Does layout + drawing if needed; true if it drew.
   pub def frame : Bool
-    return false unless @root.needs_frame
+    return false unless needs_frame?
     @root.needs_frame = false
     @root.layout(Rect.new(0_f32, 0_f32, @w, @h), @canvas)
+    layout_overlay
     # Content moved under a resting pointer; draw already shows the right hover.
     if @mouse
-      set_hover(@root.hit(@mx, @my))
+      set_hover(hit_at(@mx, @my))
       @root.needs_frame = false
+    end
+    if o = @overlay
+      o.needs_frame = false
     end
     @canvas.fill_rect(Rect.new(0_f32, 0_f32, @w, @h), BG)
     @root.draw(@canvas)
+    if o = @overlay
+      o.draw(@canvas)
+    end
     true
   end
 
@@ -124,17 +175,23 @@ pub class Ui < Context
     case e
     when MouseMove
       remember(e.x, e.y)
-      set_hover(@root.hit(e.x, e.y))
+      set_hover(hit_at(e.x, e.y))
       # A held button means a drag: the capturing widget follows the pointer.
       if c = @captured
         c.handle(e, self)
       end
     when MouseDown
       remember(e.x, e.y)
-      set_hover(@root.hit(e.x, e.y))
-      # The first widget that handles the event gets capture; MouseUp goes to it.
-      @captured = bubble(@hovered, e)
-      focus(focus_target(@hovered))
+      set_hover(hit_at(e.x, e.y))
+      if @overlay && !(@hovered && in_overlay?(@hovered))
+        # Outside the popup: it closes and the click goes no further.
+        hide_overlay
+      else
+        # The first widget that handles the event gets capture; MouseUp goes to it.
+        @captured = bubble(@hovered, e)
+        # Popup rows are not focus targets: the owner keeps focus.
+        focus(focus_target(@hovered)) unless in_overlay?(@hovered)
+      end
     when MouseUp
       if c = @captured
         c.handle(e, self)
@@ -144,7 +201,9 @@ pub class Ui < Context
       remember(e.x, e.y)
       bubble(@root.hit(e.x, e.y), e)
     when KeyDown, TextInput
-      if e.is_a?(KeyDown) && run_shortcut(e)
+      if e.is_a?(KeyDown) && e.key.escape? && @overlay
+        hide_overlay
+      elsif e.is_a?(KeyDown) && run_shortcut(e)
       elsif e.is_a?(KeyDown) && e.key.tab?
         move_focus(e.mods.shift ? -1 : 1)
       elsif f = @focused
@@ -154,6 +213,19 @@ pub class Ui < Context
       resize(e.w, e.h)
     end
     sanitize
+  end
+
+  def in_overlay?(w : Widget?) : Bool
+    return false unless w
+    if o = @overlay
+      return w.attached_to?(o)
+    end
+    false
+  end
+
+  # In the root tree or in the overlay's.
+  def live?(w : Widget) : Bool
+    w.attached_to?(@root) || in_overlay?(w)
   end
 
   # The target or its nearest focusable ancestor.
@@ -223,7 +295,7 @@ pub class Ui < Context
   # Widgets detached from the tree must not stay in hover/capture/focus.
   def sanitize : Nil
     if h = @hovered
-      unless h.attached_to?(@root)
+      unless live?(h)
         h.hovered = false
         @hovered = nil
         @root.needs_frame = true
@@ -231,7 +303,7 @@ pub class Ui < Context
       end
     end
     if c = @captured
-      unless c.attached_to?(@root)
+      unless live?(c)
         c.pressed = false
         @captured = nil
       end
@@ -242,9 +314,15 @@ pub class Ui < Context
         @focused = nil
       end
     end
+    if o = @overlay
+      if w = o.owner
+        hide_overlay unless w.attached_to?(@root)
+      end
+    end
   end
 
   @root : Widget
+  @anchor : Rect = Rect.new(0_f32, 0_f32, 0_f32, 0_f32)
   @mx : Float32
   @my : Float32
   @mouse : Bool
