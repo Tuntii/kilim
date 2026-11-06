@@ -4,7 +4,7 @@
 module bench/core
 
 import std/float
-import bench/timing::{todo_tree, set_row_text, header, measure}
+import bench/timing::{todo_tree, list_tree, set_row_text, header, measure}
 
 import kilim/geom::{Rect, Size}
 import kilim/canvas::{Canvas, Color}
@@ -104,6 +104,22 @@ def main : Int32
         ui2.frame
       end
       tb.text = ""
+      nil
+    })
+  end
+
+  # ListView: one widget, only visible rows are touched.
+  [1000, 10000].each do |n|
+    root = list_tree(n)
+    ui = Ui.new(root, NullCanvas.new, MemoryClipboard.new)
+    ui.resize(480_f32, 420_f32)
+    ui.frame
+    measure("ListView full frame (layout + draw)", n, 1500.0, -> { root.invalidate; ui.frame; nil })
+    measure("ListView 100 mouse moves", n, 1500.0, -> {
+      50.times do
+        ui.dispatch MouseMove.new(40_f32, 70_f32)
+        ui.dispatch MouseMove.new(40_f32, 110_f32)
+      end
       nil
     })
   end

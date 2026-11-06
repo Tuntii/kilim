@@ -15,6 +15,7 @@ pub import kilim/button
 pub import kilim/checkbox
 pub import kilim/textbox
 pub import kilim/scroll
+pub import kilim/list_view
 pub import kilim/event
 pub import kilim/window
 
@@ -56,6 +57,12 @@ pub def scroll(child : Kilim::Widget::Widget, sizing : Kilim::Widget::Sizing = K
   s = Kilim::Scroll::Scroll.new(child)
   s.sizing = sizing
   s
+end
+
+pub def list_view(on_select : (Int32 -> Nil)? = nil, sizing : Kilim::Widget::Sizing = Kilim::Widget::Sizing.fill) : Kilim::ListView::ListView
+  l = Kilim::ListView::ListView.new(on_select)
+  l.sizing = sizing
+  l
 end
 
 pub def fit : Kilim::Widget::Sizing

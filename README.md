@@ -72,6 +72,7 @@ list with a textbox, buttons, checkboxes, scrolling and Turkish text.
 | `checkbox(text, checked:, on_change:, sizing:)` | A checkbox with a label. Checked items are drawn struck through. |
 | `textbox(placeholder, on_change:, on_submit:, sizing:)` | A single-line text field with copy and paste. |
 | `scroll(child, sizing:)` | A vertically scrolling viewport with a scrollbar. |
+| `list_view(on_select:, sizing:)` | A selectable list; set `rows =` to `ListRow`s (title, optional detail line, header rows). Up, Down, PageUp and PageDown move the selection; long text ends in an ellipsis. |
 
 **Sizing.** Each child of a `row` or `column` sizes itself along that box's
 direction:
