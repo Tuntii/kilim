@@ -1,0 +1,81 @@
+# Word wrapping: splits a text into visual lines that fit a width (TextArea).
+
+module kilim/wrap
+
+import std/float
+import kilim/canvas::{Canvas}
+
+# Characters [start, stop) of the text; the "\n" that ends a line is not part of it.
+pub struct Line
+  getter start : Int32
+  getter stop : Int32
+
+  def initialize(@start : Int32, @stop : Int32)
+  end
+end
+
+# Breaks after spaces; a word wider than width breaks between characters; "\n" always
+# breaks. Indices are characters, never bytes. An empty text has one empty line.
+pub def wrap(c : Canvas, text : String, width : Float32) : Array(Line)
+  chars = [] of Char
+  text.each_char { |ch| chars << ch }
+  lines = [] of Line
+  s = 0
+  while true
+    e = s
+    while e < chars.size && chars[e] != '\n'
+      e += 1
+    end
+    wrap_paragraph(c, chars, s, e, width, lines)
+    break if e >= chars.size
+    s = e + 1
+  end
+  lines
+end
+
+def wrap_paragraph(c : Canvas, chars : Array(Char), s : Int32, e : Int32, width : Float32, lines : Array(Line)) : Nil
+  if s == e
+    lines << Line.new(s, s)
+    return
+  end
+  while s < e
+    # The longest run from s that fits; at least one character, so a line always advances.
+    lo = s + 1
+    hi = e
+    while lo < hi
+      mid = (lo + hi + 1) // 2
+      if c.measure(chars_between(chars, s, mid)).w <= width
+        lo = mid
+      else
+        hi = mid - 1
+      end
+    end
+    stop = lo
+    if stop < e
+      # Break after the last space in reach (the first character after the run counts);
+      # spaces beyond the edge stay on this line rather than start the next one.
+      j = stop
+      while j > s && chars[j] != ' '
+        j -= 1
+      end
+      if j > s
+        stop = j + 1
+        while stop < e && chars[stop] == ' '
+          stop += 1
+        end
+      end
+    end
+    lines << Line.new(s, stop)
+    s = stop
+  end
+end
+
+def chars_between(chars : Array(Char), from : Int32, upto : Int32) : String
+  String.build do |b|
+    i = from
+    while i < upto
+      b << chars[i]
+      i += 1
+    end
+  end
+end

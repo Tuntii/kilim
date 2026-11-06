@@ -14,6 +14,7 @@ pub import kilim/label
 pub import kilim/button
 pub import kilim/checkbox
 pub import kilim/textbox
+pub import kilim/text_area
 pub import kilim/scroll
 pub import kilim/list_view
 pub import kilim/event
@@ -49,6 +50,12 @@ end
 
 pub def textbox(placeholder : String = "", on_change : (String -> Nil)? = nil, on_submit : (String -> Nil)? = nil, sizing : Kilim::Widget::Sizing = Kilim::Widget::Sizing.fill) : Kilim::Textbox::Textbox
   t = Kilim::Textbox::Textbox.new(placeholder, "", on_change, on_submit)
+  t.sizing = sizing
+  t
+end
+
+pub def text_area(placeholder : String = "", on_change : (String -> Nil)? = nil, sizing : Kilim::Widget::Sizing = Kilim::Widget::Sizing.fill) : Kilim::TextArea::TextArea
+  t = Kilim::TextArea::TextArea.new(placeholder, "", on_change)
   t.sizing = sizing
   t
 end

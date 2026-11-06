@@ -1,0 +1,25 @@
+# wrap: breaks at spaces, inside words that do not fit, and at every "\n".
+
+module test/wrap_test
+
+import kilim/wrap::*
+import kilim/testing::*
+
+# "start-stop" pairs, joined by spaces.
+def spans(ls : Array(Line)) : String
+  ls.map { |l| "#{l.start}-#{l.stop}" }.join(" ")
+end
+
+def main : Int32
+  rc = RecordCanvas.new
+  expect_eq spans(wrap(rc, "aaa bbb", 40_f32)), "0-4 4-7", "breaks after the space: \"aaa \" / \"bbb\""
+  expect_eq spans(wrap(rc, "a\n\nb", 400_f32)), "0-1 2-2 3-4", "every newline breaks; the middle line is empty"
+  expect_eq spans(wrap(rc, "abcdefghij", 32_f32)), "0-4 4-8 8-10", "a word wider than the width breaks by characters"
+  expect_eq spans(wrap(rc, "", 40_f32)), "0-0", "an empty text has one empty line"
+  expect_eq spans(wrap(rc, "ab\n", 40_f32)), "0-2 3-3", "a trailing newline starts an empty line"
+  expect_eq spans(wrap(rc, "şöğüt ılık", 48_f32)), "0-6 6-10", "indices are characters, not bytes"
+  puts "wrap ok"
+  0
+end
+
+exit main

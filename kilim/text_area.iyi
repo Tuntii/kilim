@@ -1,0 +1,402 @@
+# Multi-line text area: word wrap, its own vertical scroll, Up/Down/Home/End by visual line.
+
+module kilim/text_area
+
+import std/float
+import kilim/geom::{Rect, Size}
+import kilim/canvas::{Canvas}
+import kilim/event::*
+import kilim/widget::*
+import kilim/theme::*
+import kilim/text_edit::{TextEdit}
+import kilim/wrap::{Line, wrap}
+
+pub class TextArea < Widget
+  property caret_visible : Bool = true
+  property on_change : (String -> Nil)?
+  getter offset : Float32 = 0_f32
+
+  def initialize(@placeholder : String = "", text : String = "", @on_change : (String -> Nil)? = nil)
+    @edit = TextEdit.new
+    @edit.set(text)
+    @last = text
+    @sizing = Sizing.fill
+  end
+
+  pub def text : String
+    @edit.text
+  end
+
+  # Not a user edit: no on_change.
+  pub def text=(s : String) : Nil
+    @edit.set(s)
+    @last = @edit.text
+    @upstream = false
+    @want_x = nil
+    rewrap(@last)
+    moved
+  end
+
+  pub def focusable? : Bool
+    true
+  end
+
+  pub def wants_text_input? : Bool
+    true
+  end
+
+  pub def focus_changed : Nil
+    @caret_visible = true
+  end
+
+  pub def blink : Nil
+    @caret_visible = !@caret_visible
+    invalidate
+  end
+
+  pub def preferred(c : Canvas) : Size
+    Size.new(TEXTBOX_MIN_W, 3 * CONTROL_H)
+  end
+
+  # Rewraps only when the width changed; edits rewrap on their own.
+  pub def layout(r : Rect, c : Canvas) : Nil
+    @bounds = r
+    @canvas = c
+    @lh = c.line_height
+    rewrap(@edit.text) if text_w != @wrap_w
+    clamp
+  end
+
+  def text_w : Float32
+    w = @bounds.w - 2 * PADDING
+    w > 0 ? w : 0_f32
+  end
+
+  def view_h : Float32
+    h = @bounds.h - 2 * PADDING
+    h > 0 ? h : 0_f32
+  end
+
+  # Paragraphs are wrapped one by one and their line lengths kept until the next rewrap,
+  # so an edit measures only the paragraphs it changed (300 paragraphs: 100 ms -> 1 ms).
+  def rewrap(t : String) : Nil
+    c = @canvas
+    return unless c
+    w = text_w
+    memo = w == @wrap_w ? @memo : {} of String => Array(Int32)
+    @wrap_w = w
+    fresh = {} of String => Array(Int32)
+    lines = [] of Line
+    base = 0
+    t.split('\n').each do |p|
+      lens = fresh[p]? || memo[p]? || wrap(c, p, w).map { |l| l.stop - l.start }
+      fresh[p] = lens
+      lens.each do |n|
+        lines << Line.new(base, base + n)
+        base += n
+      end
+      base += 1
+    end
+    @lines = lines
+    @memo = fresh
+  end
+
+  # The visual line of the caret. At a soft break the index is both the end of one line
+  # and the start of the next; @upstream picks the end (after End, or a click past it).
+  def caret_line : Int32
+    i = @edit.cursor
+    lo = 0
+    hi = @lines.size - 1
+    while lo < hi
+      mid = (lo + hi + 1) // 2
+      if @lines[mid].start <= i
+        lo = mid
+      else
+        hi = mid - 1
+      end
+    end
+    lo -= 1 if @upstream && lo > 0 && @lines[lo - 1].stop == i
+    lo
+  end
+
+  # Screen y of line k's top.
+  def line_y(k : Int32) : Float32
+    @bounds.y + PADDING + k * @lh - @offset
+  end
+
+  # x of index i inside line k, from the text's left edge.
+  def x_in(k : Int32, i : Int32, c : Canvas) : Float32
+    c.measure(@edit.join(@lines[k].start, i)).w
+  end
+
+  # Places the caret at i on line k (for the soft-break choice).
+  def place(i : Int32, k : Int32, grow : Bool) : Nil
+    @edit.move_to(i, grow)
+    l = @lines[k]
+    @upstream = i == l.stop && k + 1 < @lines.size && @lines[k + 1].start == i
+  end
+
+  # The caret on line k nearest to x (from the text's left edge).
+  def place_at_x(k : Int32, x : Float32, grow : Bool, c : Canvas) : Nil
+    l = @lines[k]
+    place(@edit.index_near(c, l.start, l.stop, x), k, grow)
+  end
+
+  pub def caret_rect : Rect?
+    if c = @canvas
+      k = caret_line
+      return Rect.new(@bounds.x + PADDING + x_in(k, @edit.cursor, c), line_y(k), 1_f32, @lh)
+    end
+    nil
+  end
+
+  pub def draw(c : Canvas) : Nil
+    c.fill_rect(bounds, BUTTON_BG)
+    c.stroke_rect(bounds, focused ? FOCUS_RING : BORDER)
+    clip = bounds.inset(PADDING / 2)
+    c.push_clip(clip)
+    x0 = @bounds.x + PADDING
+    if @edit.size == 0
+      c.text(x0, line_y(0), @placeholder, MUTED)
+    else
+      # Lines are fixed height: only the ones inside the clip are drawn.
+      first = ((clip.y - line_y(0)) / @lh).floor.to_i
+      last = ((clip.y + clip.h - line_y(0)) / @lh).floor.to_i
+      first = 0 if first < 0
+      last = @lines.size - 1 if last > @lines.size - 1
+      sel = @edit.selection
+      k = first
+      while k <= last
+        l = @lines[k]
+        y = line_y(k)
+        if s = sel
+          a = s[0] > l.start ? s[0] : l.start
+          b = s[1] < l.stop ? s[1] : l.stop
+          if a <= b
+            xa = x0 + x_in(k, a, c)
+            xb = x0 + x_in(k, b, c)
+            # A selected line break shows as a space's width, so empty lines show too.
+            xb += c.measure(" ").w if s[1] > l.stop && k + 1 < @lines.size && @lines[k + 1].start > l.stop
+            c.fill_rect(Rect.new(xa, y, xb - xa, @lh), SELECTION) if xb > xa
+          end
+        end
+        c.text(x0, y, @edit.join(l.start, l.stop), FG)
+        k += 1
+      end
+    end
+    if focused && @caret_visible
+      if r = caret_rect
+        c.line(r.x, r.y, r.x, r.y + r.h, FG)
+      end
+    end
+    c.pop_clip
+    total = @lines.size * @lh
+    range = total - view_h
+    if range > 0
+      th = @bounds.h * view_h / total
+      ty = @bounds.y + @offset / range * (@bounds.h - th)
+      c.fill_rect(Rect.new(@bounds.x + @bounds.w - SCROLLBAR_W, ty, SCROLLBAR_W, th), SCROLLBAR)
+    end
+  end
+
+  pub def handle(e : Event, ui : Context) : Bool
+    c = @canvas
+    return false unless c
+    case e
+    when MouseDown
+      return false unless e.button.left?
+      click(e.x, e.y, false, c)
+      true
+    when MouseMove
+      click(e.x, e.y, true, c)
+      true
+    when MouseUp
+      true
+    when Wheel
+      old = @offset
+      @offset -= e.dy * WHEEL_STEP
+      clamp
+      return false if @offset == old
+      invalidate
+      true
+    when TextInput
+      @edit.insert(e.text)
+      edited
+      true
+    when KeyDown
+      shift = e.mods.shift
+      case e.key
+      when Key::Enter
+        @edit.insert("\n")
+      when Key::Backspace
+        @edit.backspace
+      when Key::Delete
+        @edit.delete
+      when Key::Up
+        vertical(-1, shift, c)
+        return true
+      when Key::Down
+        vertical(1, shift, c)
+        return true
+      when Key::PageUp
+        vertical(-page_lines, shift, c)
+        return true
+      when Key::PageDown
+        vertical(page_lines, shift, c)
+        return true
+      when Key::Home
+        k = caret_line
+        place(@lines[k].start, k, shift)
+        horizontal
+        return true
+      when Key::End
+        k = caret_line
+        place(@lines[k].stop, k, shift)
+        horizontal
+        return true
+      when Key::Left
+        @edit.left(shift)
+        @upstream = false
+        horizontal
+        return true
+      when Key::Right
+        @edit.right(shift)
+        @upstream = false
+        horizontal
+        return true
+      when Key::C
+        return false unless e.mods.primary
+        ui.clipboard.set(@edit.selected_text) if @edit.selection
+        return true
+      when Key::X
+        return false unless e.mods.primary
+        return true unless @edit.selection
+        ui.clipboard.set(@edit.selected_text)
+        @edit.delete_selection
+      when Key::A
+        return false unless e.mods.primary
+        @edit.select_all
+        @upstream = false
+        horizontal
+        return true
+      when Key::V
+        return false unless e.mods.primary
+        @edit.insert(lf(ui.clipboard.get))
+      else
+        return false
+      end
+      edited
+      true
+    else
+      false
+    end
+  end
+
+  # Mouse down (grow = false) or drag: the caret goes to the nearest index on the line under y.
+  def click(x : Float32, y : Float32, grow : Bool, c : Canvas) : Nil
+    k = ((y - line_y(0)) / @lh).floor.to_i
+    k = 0 if k < 0
+    k = @lines.size - 1 if k > @lines.size - 1
+    old = @edit.cursor
+    was = @upstream
+    place_at_x(k, x - @bounds.x - PADDING, grow, c)
+    # A drag fires on every pointer move; repaint only when the caret moved.
+    return if grow && @edit.cursor == old && @upstream == was
+    horizontal
+  end
+
+  # Up/Down by n visual lines at the remembered x; past the first or last line, to the text's end.
+  def vertical(n : Int32, grow : Bool, c : Canvas) : Nil
+    k = caret_line
+    x = @want_x || x_in(k, @edit.cursor, c)
+    t = k + n
+    if t < 0
+      @edit.move_to(0, grow)
+      @upstream = false
+    elsif t >= @lines.size
+      @edit.move_to(@edit.size, grow)
+      @upstream = false
+    else
+      place_at_x(t, x, grow, c)
+    end
+    @want_x = x
+    moved
+  end
+
+  def page_lines : Int32
+    n = (view_h / @lh).to_i
+    n > 1 ? n : 1
+  end
+
+  # Any move but Up/Down forgets the x that Up/Down keep.
+  def horizontal : Nil
+    @want_x = nil
+    moved
+  end
+
+  def moved : Nil
+    @caret_visible = true
+    reveal_caret
+    invalidate
+  end
+
+  # After every user edit: rewrap, caret visible, on_change if the text changed.
+  def edited : Nil
+    @upstream = false
+    @want_x = nil
+    t = @edit.text
+    rewrap(t)
+    moved
+    return if t == @last
+    @last = t
+    if f = @on_change
+      f.call(t)
+    end
+  end
+
+  # Scrolls the least amount that shows the caret's whole line.
+  def reveal_caret : Nil
+    return unless @canvas
+    top = caret_line * @lh
+    @offset = top + @lh - view_h if top + @lh - @offset > view_h
+    @offset = top if top < @offset
+    clamp
+  end
+
+  def clamp : Nil
+    max = @lines.size * @lh - view_h
+    max = 0_f32 if max < 0
+    @offset = max if @offset > max
+    @offset = 0_f32 if @offset < 0
+  end
+
+  # "\r\n" and a lone "\r" become "\n".
+  def lf(s : String) : String
+    cs = [] of Char
+    s.each_char { |ch| cs << ch }
+    String.build do |b|
+      i = 0
+      while i < cs.size
+        ch = cs[i]
+        if ch == '\r'
+          b << '\n'
+          i += 1 if i + 1 < cs.size && cs[i + 1] == '\n'
+        else
+          b << ch
+        end
+        i += 1
+      end
+    end
+  end
+
+  @placeholder : String
+  @edit : TextEdit
+  @canvas : Canvas? = nil
+  @last : String
+  @lines : Array(Line) = [Line.new(0, 0)]
+  @wrap_w : Float32 = -1_f32
+  @memo : Hash(String, Array(Int32)) = {} of String => Array(Int32)
+  @lh : Float32 = 16_f32
+  @upstream : Bool = false
+  @want_x : Float32? = nil
+end

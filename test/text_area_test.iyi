@@ -1,0 +1,141 @@
+# TextArea: newlines, vertical caret movement, visual-line Home/End, paste, scrolling, mouse.
+
+module test/text_area_test
+
+import std/float
+import kilim/event::*
+import kilim/widget::*
+import kilim/box::*
+import kilim/ui::{Ui}
+import kilim/button::{Button}
+import kilim/text_area::{TextArea}
+import kilim/theme::*
+import kilim/testing::*
+
+class Log
+  property changes : Int32 = 0
+end
+
+def key(ui : Ui, k : Key, shift : Bool = false, primary : Bool = false) : Nil
+  ui.dispatch KeyDown.new(k, Mods.new(shift, primary))
+end
+
+def main : Int32
+  lg = Log.new
+  ta = TextArea.new("notes", "", ->(s : String) { lg.changes += 1; nil })
+  btn = Button.new("x")
+  rc = RecordCanvas.new
+  mem = MemoryClipboard.new
+  ui = Ui.new(Box.new(Axis::Column, [ta, btn] of Widget), rc, mem)
+  # 10 characters of text per line, 3 visible lines (line height 16).
+  ui.resize(10 * 8 + 2 * PADDING, 3 * 16 + 2 * PADDING + CONTROL_H)
+  ui.frame
+  expect_eq ta.bounds.h, 3 * 16 + 2 * PADDING, "the text area fills the column"
+  x0 = ta.bounds.x + PADDING
+  y0 = ta.bounds.y + PADDING
+
+  ui.focus(ta)
+  expect ui.wants_text_input?, "a focused text area wants text input"
+  ui.frame
+  expect rc.calls.any? { |c| c.ends_with?(",notes") }, "placeholder is drawn when empty"
+
+  ui.dispatch TextInput.new("ab")
+  key(ui, Key::Enter)
+  ui.dispatch TextInput.new("ç")
+  expect_eq ta.text, "ab\nç", "Enter inserts a newline"
+  expect_eq lg.changes, 3, "on_change per edit"
+
+  # Up/Down keep the caret's x across lines of different lengths.
+  ta.text = "abcdef\nab\nabcdef"
+  expect_eq lg.changes, 3, "text= does not call on_change"
+  key(ui, Key::Up)
+  key(ui, Key::Up)
+  ui.dispatch TextInput.new("X")
+  expect_eq ta.text, "abcdefX\nab\nabcdef", "Up, Up from column 6 passes a short line and returns to column 6"
+  key(ui, Key::Backspace)
+  key(ui, Key::Down)
+  key(ui, Key::Down)
+  ui.dispatch TextInput.new("Y")
+  expect_eq ta.text, "abcdef\nab\nabcdefY", "Down, Down keeps column 6 too"
+
+  # Home/End go to the ends of the visual line, not of the paragraph.
+  ta.text = "aaaa bbbb cccc"
+  key(ui, Key::Home)
+  ui.dispatch TextInput.new("X")
+  expect_eq ta.text, "aaaa bbbb Xcccc", "Home goes to the start of the wrapped line"
+  key(ui, Key::Up)
+  key(ui, Key::End)
+  if r = ta.caret_rect
+    expect_eq r.y, y0, "End keeps the caret on the first visual line"
+    expect_eq r.x, x0 + 80, "End puts the caret after the line's last character"
+  else
+    expect false, "a laid-out text area has a caret_rect"
+  end
+  ui.dispatch TextInput.new("Y")
+  expect_eq ta.text, "aaaa bbbb YXcccc", "End is the index after the trailing space"
+  key(ui, Key::Up)
+  key(ui, Key::Home)
+  ui.dispatch TextInput.new("Z")
+  expect_eq ta.text, "Zaaaa bbbb YXcccc", "Home on the first line"
+  key(ui, Key::Home, shift: true)
+  key(ui, Key::C, primary: true)
+  expect_eq mem.get, "Z", "Shift+Home selects"
+
+  # Paste: CRLF becomes LF.
+  ta.text = ""
+  mem.set("a\r\nb\rc")
+  key(ui, Key::V, primary: true)
+  expect_eq ta.text, "a\nb\nc", "pasting CRLF and CR inserts LF"
+
+  # Typing past the bottom scrolls so the caret stays visible; only visible lines are drawn.
+  ta.text = ""
+  ui.dispatch TextInput.new("1")
+  ["2", "3", "4", "5"].each do |s|
+    key(ui, Key::Enter)
+    ui.dispatch TextInput.new(s)
+  end
+  expect_eq ta.offset, 32_f32, "scrolled by two lines"
+  if r = ta.caret_rect
+    expect r.y >= y0 && r.y + r.h <= ta.bounds.y + ta.bounds.h - PADDING, "the caret is inside the view"
+  end
+  rc.calls.clear
+  ui.frame
+  expect !rc.calls.any? { |c| c.starts_with?("text ") && c.ends_with?(",1") }, "a line scrolled away is not drawn"
+  expect rc.calls.any? { |c| c.starts_with?("text ") && c.ends_with?(",5") }, "the last line is drawn"
+  ui.dispatch Wheel.new(x0, y0, 1_f32)
+  expect_eq ta.offset, 0_f32, "the wheel scrolls up"
+
+  # Tab still moves focus.
+  key(ui, Key::Tab)
+  expect btn.focused, "Tab moves focus out of the text area"
+  expect_eq ta.text, "1\n2\n3\n4\n5", "Tab does not insert anything"
+
+  # Clicking on the second line places the caret there; caret_rect follows it.
+  ta.text = "abc\ndef\nghi"
+  ui.frame
+  ui.dispatch MouseDown.new(x0 + 8 + 2, y0 + 16 + 4, MouseButton::Left)
+  ui.dispatch MouseUp.new(x0 + 8 + 2, y0 + 16 + 4, MouseButton::Left)
+  expect ta.focused, "a click focuses the text area"
+  ui.dispatch TextInput.new("X")
+  expect_eq ta.text, "abc\ndXef\nghi", "the click put the caret on line 2, column 1"
+  if r = ta.caret_rect
+    expect_eq r.y, y0 + 16, "caret_rect is on the caret's line"
+    expect_eq r.x, x0 + 16, "caret_rect is after the typed character"
+    expect_eq r.h, 16_f32, "caret is one line high"
+  end
+
+  # Dragging selects across lines; a move that does not move the caret does not repaint.
+  ui.dispatch MouseDown.new(x0 + 8 + 1, y0 + 4, MouseButton::Left)
+  ui.dispatch MouseMove.new(x0 + 16 + 1, y0 + 16 + 4)
+  ui.frame
+  ui.dispatch MouseMove.new(x0 + 16 + 2, y0 + 16 + 5)
+  expect !ui.needs_frame?, "a drag that keeps the caret index does not repaint"
+  ui.dispatch MouseUp.new(x0 + 16 + 2, y0 + 16 + 5, MouseButton::Left)
+  key(ui, Key::C, primary: true)
+  expect_eq mem.get, "bc\ndX", "drag from line 1 to line 2 selects across the newline"
+
+  puts "text area ok"
+  0
+end
+
+exit main
