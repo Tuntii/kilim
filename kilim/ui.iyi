@@ -150,6 +150,8 @@ pub class Ui < Context
 
   # Does layout + drawing if needed; true if it drew.
   pub def frame : Bool
+    # Timer and inbox handlers change the tree outside dispatch: no ghost popup, modal or focus.
+    sanitize
     return false unless needs_frame?
     @root.needs_frame = false
     @root.layout(Rect.new(0_f32, 0_f32, @w, @h), @canvas)

@@ -127,6 +127,28 @@ def main : Int32
   ui.dispatch MouseMove.new(250_f32, 150_f32)
   expect ui.overlay.nil?, "overlay hidden when its owner left the tree"
 
+  # removed outside dispatch (a timer or inbox handler): the next frame drops the popup
+  log = Log.new
+  d = Dropdown.new(["To do", "Doing", "Done"], 0, ->(i : Int32) { log.picks << i; nil })
+  col = Box.new(Axis::Column, [d, Button.new("under"), Button.new("under too")] of Widget)
+  rc = RecordCanvas.new
+  ui = Ui.new(col, rc, MemoryClipboard.new)
+  ui.resize(300_f32, 200_f32)
+  ui.frame
+  click(ui, d)
+  ui.frame
+  row = Rect.new(0_f32, 0_f32, 0_f32, 0_f32)
+  if o = ui.overlay
+    row = o.children[1].bounds
+  end
+  col.remove(d)
+  rc.calls.clear
+  ui.frame
+  expect ui.overlay.nil?, "frame hides the overlay of a removed owner"
+  expect !rc.calls.any? { |c| c.ends_with?(",Doing") }, "no ghost popup is drawn"
+  press(ui, row.x + 5, row.y + 5)
+  expect log.picks.empty?, "a click where the popup was picks no option"
+
   # near the bottom of the window the popup flips above
   log = Log.new
   d = Dropdown.new(["a", "b", "c"], 0)
