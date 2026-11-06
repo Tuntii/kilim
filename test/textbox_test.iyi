@@ -106,6 +106,15 @@ def main : Int32
   ui2.dispatch TextInput.new("y")
   expect tb2.caret_visible, "caret visible when typing"
 
+  # Programmatic text= is not a user edit: no on_change, but typing afterwards still counts.
+  before = lg.changes
+  tb.text = "x"
+  expect_eq tb.text, "x", "text= sets"
+  expect_eq lg.changes, before, "text= does not call on_change"
+  ui.focus(tb)
+  ui.dispatch TextInput.new("y")
+  expect_eq lg.changes, before + 1, "typing after text= still calls on_change"
+
   puts "textbox ok"
   0
 end

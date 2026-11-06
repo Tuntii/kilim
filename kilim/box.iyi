@@ -113,6 +113,36 @@ pub class Box < Widget
     end
   end
 
+  # Children sit in order along the main axis without overlap, so the one under the point
+  # is found by binary search: the last child starting at or before it. Zero-size children
+  # share a start with their successor; the scan steps back over them.
+  # shortcut: relies on the bounds of the last layout, so a child added since is not sorted yet; fine until the next frame.
+  pub def hit(x : Float32, y : Float32) : Widget?
+    return nil unless @bounds.contains?(x, y)
+    p = @axis.row? ? x : y
+    lo = 0
+    hi = @kids.size
+    while lo < hi
+      mid = (lo + hi) // 2
+      b = @kids[mid].bounds
+      if (@axis.row? ? b.x : b.y) <= p
+        lo = mid + 1
+      else
+        hi = mid
+      end
+    end
+    i = lo - 1
+    while i >= 0
+      b = @kids[i].bounds
+      if h = @kids[i].hit(x, y)
+        return h
+      end
+      break if (@axis.row? ? b.w : b.h) > 0
+      i -= 1
+    end
+    self
+  end
+
   pub def draw(c : Canvas) : Nil
     # Children outside the clip (scrolled away) are skipped.
     @kids.each { |w| w.draw(c) if c.visible?(w.bounds) }

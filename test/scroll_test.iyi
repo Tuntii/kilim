@@ -37,6 +37,12 @@ def setup : Tuple(Box, Scroll, Ui, RecordCanvas)
   {col, scroll, ui, rc}
 end
 
+def tall : Dummy
+  d = Dummy.new
+  d.sizing = Sizing.fixed(40_f32)
+  d
+end
+
 def wheel(ui : Ui, s : Scroll, dy : Float32) : Nil
   ui.dispatch Wheel.new(s.bounds.x + 10, s.bounds.y + 10, dy)
   ui.frame
@@ -84,6 +90,47 @@ def main : Int32
   25.times { |k| col.remove(kids[k]) }
   ui.frame
   expect_eq scroll.offset, 0_f32, "offset drops when content shrinks"
+
+  # test_hover_after_wheel
+  col, scroll, ui, rc = setup
+  ui.dispatch MouseMove.new(scroll.bounds.x + 10, scroll.bounds.y + 10)
+  expect ui.hovered == col.children[0], "hover before wheel"
+  ui.dispatch Wheel.new(scroll.bounds.x + 10, scroll.bounds.y + 10, -1_f32)
+  ui.frame
+  expect ui.hovered == col.children[1], "hover follows the content after a wheel step"
+
+  # test_reveal
+  col, scroll, ui, rc = setup
+  scroll.reveal(col.children[7].bounds)
+  expect_eq scroll.offset, 8 * 40 - 200_f32, "reveal below: least scroll that fits"
+  expect col.children[7].bounds.y + 40 <= scroll.bounds.y + 200, "revealed row is inside"
+  scroll.reveal(col.children[2].bounds)
+  expect_eq scroll.offset, 80_f32, "reveal above: row top at viewport top"
+  scroll.reveal(col.children[3].bounds)
+  expect_eq scroll.offset, 80_f32, "already visible: no change"
+  scroll.reveal(Rect.new(0_f32, col.children[10].bounds.y, 10_f32, 500_f32))
+  expect_eq scroll.offset, 400_f32, "taller than viewport: top wins"
+
+  # test_nested_wheel_bubbles
+  inner_col = Box.new(Axis::Column)
+  10.times { inner_col.add(tall) }
+  inner = Scroll.new(inner_col)
+  inner.sizing = Sizing.fixed(100_f32)
+  outer_col = Box.new(Axis::Column, [inner] of Widget)
+  10.times { outer_col.add(tall) }
+  outer = Scroll.new(outer_col)
+  outer.sizing = Sizing.fixed(200_f32)
+  nroot = Box.new(Axis::Column, [outer] of Widget)
+  nui = Ui.new(nroot, RecordCanvas.new, MemoryClipboard.new)
+  nui.resize(300_f32, 400_f32)
+  nui.frame
+  nui.dispatch Wheel.new(inner.bounds.x + 10, inner.bounds.y + 10, -1_f32)
+  expect_eq inner.offset, 40_f32, "inner scrolls first"
+  expect_eq outer.offset, 0_f32, "outer waits"
+  nui.dispatch Wheel.new(inner.bounds.x + 10, inner.bounds.y + 10, -1000_f32)
+  nui.frame
+  nui.dispatch Wheel.new(inner.bounds.x + 10, inner.bounds.y + 10, -1_f32)
+  expect outer.offset > 0_f32, "inner at its limit: outer scrolls"
 
   puts "scroll_test OK"
   0

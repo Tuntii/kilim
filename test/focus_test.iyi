@@ -10,6 +10,7 @@ import kilim/ui::{Ui}
 import kilim/label::{Label}
 import kilim/button::{Button}
 import kilim/checkbox::{Checkbox}
+import kilim/scroll::{Scroll}
 import kilim/testing::*
 
 class Log
@@ -74,6 +75,24 @@ def main : Int32
   rc.calls.clear
   ui.frame
   expect rc.calls.count(&.starts_with?("line")) == 3, "check mark (2) + strike (1) lines"
+
+  # Tab reveals the focused widget inside a Scroll.
+  btns = [] of Button
+  scol = Box.new(Axis::Column)
+  20.times { |k| bt = Button.new("b#{k}"); btns << bt; scol.add(bt) }
+  sc = Scroll.new(scol)
+  sc.sizing = Sizing.fixed(100_f32)
+  sroot = Box.new(Axis::Column, [sc] of Widget)
+  sui = Ui.new(sroot, RecordCanvas.new, MemoryClipboard.new)
+  sui.resize(300_f32, 300_f32)
+  sui.frame
+  20.times { tab(sui) }
+  expect sui.focused == btns[19], "tabbed to the last button"
+  expect sc.offset > 0_f32, "Tab scrolled"
+  lb = btns[19].bounds
+  expect lb.y >= sc.bounds.y && lb.y + lb.h <= sc.bounds.y + sc.bounds.h, "focused button fully visible"
+  tab(sui)
+  expect_eq sc.offset, 0_f32, "wrapping to the first button scrolls back"
 
   puts "focus ok"
   0

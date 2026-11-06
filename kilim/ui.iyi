@@ -30,6 +30,9 @@ pub class Ui < Context
     @shortcuts = [] of Shortcut
     @w = 0_f32
     @h = 0_f32
+    @mx = 0_f32
+    @my = 0_f32
+    @mouse = false
     @root.needs_frame = true
   end
 
@@ -54,6 +57,11 @@ pub class Ui < Context
     return false unless @root.needs_frame
     @root.needs_frame = false
     @root.layout(Rect.new(0_f32, 0_f32, @w, @h), @canvas)
+    # Content moved under a resting pointer; draw already shows the right hover.
+    if @mouse
+      set_hover(@root.hit(@mx, @my))
+      @root.needs_frame = false
+    end
     @canvas.fill_rect(Rect.new(0_f32, 0_f32, @w, @h), BG)
     @root.draw(@canvas)
     true
@@ -115,8 +123,10 @@ pub class Ui < Context
     sanitize
     case e
     when MouseMove
+      remember(e.x, e.y)
       set_hover(@root.hit(e.x, e.y))
     when MouseDown
+      remember(e.x, e.y)
       set_hover(@root.hit(e.x, e.y))
       # The first widget that handles the event gets capture; MouseUp goes to it.
       @captured = bubble(@hovered, e)
@@ -127,6 +137,7 @@ pub class Ui < Context
         @captured = nil
       end
     when Wheel
+      remember(e.x, e.y)
       bubble(@root.hit(e.x, e.y), e)
     when KeyDown, TextInput
       if e.is_a?(KeyDown) && run_shortcut(e)
@@ -164,6 +175,7 @@ pub class Ui < Context
     j = i ? (i + dir) % n : (dir > 0 ? 0 : n - 1)
     j += n if j < 0
     focus(order[j])
+    order[j].reveal
   end
 
   def collect(w : Widget, acc : Array(Widget)) : Nil
@@ -186,6 +198,12 @@ pub class Ui < Context
     nil
   end
 
+  def remember(x : Float32, y : Float32) : Nil
+    @mx = x
+    @my = y
+    @mouse = true
+  end
+
   def set_hover(w : Widget?) : Nil
     return if w == @hovered
     if o = @hovered
@@ -205,6 +223,7 @@ pub class Ui < Context
         h.hovered = false
         @hovered = nil
         @root.needs_frame = true
+        # The next frame re-hits the resting pointer once the layout is fresh.
       end
     end
     if c = @captured
@@ -222,6 +241,9 @@ pub class Ui < Context
   end
 
   @root : Widget
+  @mx : Float32
+  @my : Float32
+  @mouse : Bool
   @canvas : Canvas
   @w : Float32
   @h : Float32

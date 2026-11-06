@@ -28,6 +28,8 @@ pub class Textbox < Widget
 
   pub def text=(s : String) : Nil
     @edit.set(s)
+    # Not a user edit: remember the text so the next real edit compares against it.
+    @last = @edit.text
     changed
   end
 
