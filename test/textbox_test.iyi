@@ -53,7 +53,11 @@ def main : Int32
   expect_eq lg.submitted, s, "Enter -> on_submit"
 
   key(ui, Key::C, true)
-  expect_eq mem.get, s, "primary+C to clipboard"
+  expect_eq mem.get, "", "primary+C without a selection leaves the clipboard alone"
+  key(ui, Key::A, true)
+  key(ui, Key::C, true)
+  expect_eq mem.get, s, "select all, then primary+C copies everything"
+  key(ui, Key::End)
   key(ui, Key::C)
   mem.set("a\nb")
   key(ui, Key::V, true)
@@ -66,6 +70,37 @@ def main : Int32
   key(ui, Key::Home)
   key(ui, Key::Delete)
   expect tb.text.starts_with?("alışma"), "Home + Delete, Ç is a single character"
+
+  # mouse selection (8 px per character)
+  tb3 = Textbox.new("", "abcdefgh")
+  ui3 = Ui.new(Box.new(Axis::Column, [tb3] of Widget), rc, mem)
+  ui3.resize(200_f32, 100_f32)
+  ui3.frame
+  x0 = tb3.bounds.x + PADDING
+  y0 = tb3.bounds.y + 5_f32
+  ui3.dispatch MouseDown.new(x0 + 8 * 3 + 2, y0, MouseButton::Left)
+  ui3.dispatch MouseUp.new(x0 + 8 * 3 + 2, y0, MouseButton::Left)
+  ui3.dispatch TextInput.new("X")
+  expect_eq tb3.text, "abcXdefgh", "click puts the caret at 3"
+  expect_eq tb3.index_at(x0 - 50_f32), 0, "index_at clamps left"
+  expect_eq tb3.index_at(x0 + 500_f32), 9, "index_at clamps right"
+  ui3.dispatch MouseDown.new(x0 + 8 + 1, y0, MouseButton::Left)
+  ui3.dispatch MouseMove.new(x0 + 8 * 4 + 1, y0)
+  ui3.dispatch MouseUp.new(x0 + 8 * 4 + 1, y0, MouseButton::Left)
+  mem.set("")
+  key(ui3, Key::X, true)
+  expect_eq mem.get, "bcX", "drag from 1 to 4 selects 3 characters; primary+X cuts them"
+  expect_eq tb3.text, "adefgh", "cut removes the selection"
+  mem.set("zz")
+  key(ui3, Key::A, true)
+  ui3.dispatch TextInput.new("q")
+  expect_eq tb3.text, "q", "typing replaces the selection"
+  key(ui3, Key::V, true)
+  expect_eq tb3.text, "qzz", "paste"
+  ui3.dispatch KeyDown.new(Key::Left, Mods.new(true, false))
+  ui3.dispatch KeyDown.new(Key::Left, Mods.new(true, false))
+  key(ui3, Key::V, true)
+  expect_eq tb3.text, "qzz", "paste replaces the selection"
 
   # caret stays visible
   tb2 = Textbox.new

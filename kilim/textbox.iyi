@@ -65,6 +65,12 @@ pub class Textbox < Widget
     c.stroke_rect(bounds, focused ? FOCUS_RING : BORDER)
     ty = bounds.y + (bounds.h - c.line_height) / 2
     c.push_clip(bounds.inset(PADDING / 2))
+    if sel = @edit.selection
+      x0 = bounds.x + PADDING - @scroll_x
+      xa = x0 + c.measure(@edit.prefix(sel[0])).w
+      xb = x0 + c.measure(@edit.prefix(sel[1])).w
+      c.fill_rect(Rect.new(xa, ty, xb - xa, c.line_height), SELECTION)
+    end
     if @edit.size == 0
       c.text(bounds.x + PADDING, ty, @placeholder, MUTED)
     else
@@ -89,8 +95,40 @@ pub class Textbox < Widget
     Rect.new(bounds.x + PADDING + c.measure(@edit.before_cursor).w - @scroll_x, ty, 1_f32, c.line_height)
   end
 
+  # The caret index nearest to logical x (binary search over prefix widths).
+  pub def index_at(x : Float32) : Int32
+    c = @canvas
+    return 0 unless c
+    px = x - bounds.x - PADDING + @scroll_x
+    lo = 0
+    hi = @edit.size
+    while lo < hi
+      mid = (lo + hi) // 2
+      if c.measure(@edit.prefix(mid)).w < px
+        lo = mid + 1
+      else
+        hi = mid
+      end
+    end
+    if lo > 0 && px - c.measure(@edit.prefix(lo - 1)).w < c.measure(@edit.prefix(lo)).w - px
+      lo -= 1
+    end
+    lo
+  end
+
   pub def handle(e : Event, ui : Context) : Bool
     case e
+    when MouseDown
+      return false unless e.button.left?
+      @edit.move_to(index_at(e.x), false)
+      changed
+      true
+    when MouseMove
+      @edit.move_to(index_at(e.x), true)
+      changed
+      true
+    when MouseUp
+      true
     when TextInput
       @edit.insert(e.text)
       changed
@@ -102,13 +140,13 @@ pub class Textbox < Widget
       when Key::Delete
         @edit.delete
       when Key::Left
-        @edit.left
+        @edit.left(e.mods.shift)
       when Key::Right
-        @edit.right
+        @edit.right(e.mods.shift)
       when Key::Home
-        @edit.home
+        @edit.home(e.mods.shift)
       when Key::End
-        @edit.end_
+        @edit.end_(e.mods.shift)
       when Key::Enter
         if f = @on_submit
           f.call(@edit.text)
@@ -116,8 +154,16 @@ pub class Textbox < Widget
         return true
       when Key::C
         return false unless e.mods.primary
-        ui.clipboard.set(@edit.text)
+        ui.clipboard.set(@edit.selected_text) if @edit.selection
         return true
+      when Key::X
+        return false unless e.mods.primary
+        return true unless @edit.selection
+        ui.clipboard.set(@edit.selected_text)
+        @edit.delete_selection
+      when Key::A
+        return false unless e.mods.primary
+        @edit.select_all
       when Key::V
         return false unless e.mods.primary
         @edit.insert(one_line(ui.clipboard.get))

@@ -34,6 +34,39 @@ def main : Int32
   e.home
   e.backspace
   expect_eq e.text, "Çaş", "backspace at start has no effect"
+
+  # selection: indices are characters
+  e.set("ş😀A")
+  expect e.selection.nil?, "no selection after set"
+  e.left(true)
+  e.left(true)
+  expect_eq e.selected_text, "😀A", "Shift+Left twice selects two characters"
+  expect_eq e.anchor, 3, "anchor stays where selecting began"
+  e.insert("x")
+  expect_eq e.text, "şx", "typing replaces the selection"
+  e.select_all
+  expect_eq e.selected_text, "şx", "select_all"
+  e.backspace
+  expect_eq e.text, "", "backspace deletes the selection"
+  e.set("abcd")
+  e.left(true)
+  e.left(true)
+  e.left
+  expect_eq e.cursor, 2, "Left collapses to the selection start"
+  expect e.selection.nil?, "collapsed"
+  e.right(true)
+  e.right
+  expect_eq e.cursor, 3, "Right collapses to the selection end"
+  e.move_to(1, false)
+  e.move_to(3, true)
+  expect_eq e.selected_text, "bc", "move_to extends"
+  expect e.delete_selection, "delete_selection reports a change"
+  expect !e.delete_selection, "nothing left to delete"
+  expect_eq e.text, "ad", "selection removed"
+  e.home(true)
+  expect_eq e.selected_text, "a", "Shift+Home"
+  e.end_(true)
+  expect_eq e.selected_text, "d", "anchor kept, Shift+End"
   puts "text_edit ok"
   0
 end

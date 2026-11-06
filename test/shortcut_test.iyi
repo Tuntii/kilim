@@ -35,8 +35,9 @@ def main : Int32
   expect tb.text == "abc", "textbox untouched by Ctrl+N"
   ui.dispatch KeyDown.new(Key::N, Mods.new)
   expect lg.n == 1, "plain N is not Ctrl+N"
+  ui.dispatch KeyDown.new(Key::A, ctrl)
   ui.dispatch KeyDown.new(Key::C, ctrl)
-  expect clip.get == "abc", "Ctrl+C without a shortcut still copies"
+  expect clip.get == "abc", "Ctrl+A, Ctrl+C without a shortcut still copy"
 
   ui.dispatch KeyDown.new(Key::Delete, Mods.new)
   expect lg.del == 0, "plain shortcut skipped while a textbox is focused"
