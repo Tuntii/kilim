@@ -139,8 +139,6 @@ pub class Ui < Context
     when Wheel
       remember(e.x, e.y)
       bubble(@root.hit(e.x, e.y), e)
-      # A Scroll has already moved its content: whatever is under the pointer now is hovered.
-      set_hover(@root.hit(@mx, @my))
     when KeyDown, TextInput
       if e.is_a?(KeyDown) && run_shortcut(e)
       elsif e.is_a?(KeyDown) && e.key.tab?

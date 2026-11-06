@@ -96,6 +96,7 @@ def main : Int32
   ui.dispatch MouseMove.new(scroll.bounds.x + 10, scroll.bounds.y + 10)
   expect ui.hovered == col.children[0], "hover before wheel"
   ui.dispatch Wheel.new(scroll.bounds.x + 10, scroll.bounds.y + 10, -1_f32)
+  ui.frame
   expect ui.hovered == col.children[1], "hover follows the content after a wheel step"
 
   # test_reveal

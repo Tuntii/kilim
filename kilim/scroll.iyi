@@ -44,20 +44,21 @@ pub class Scroll < Widget
     d = 0_f32
     d = r.y + r.h - (@bounds.y + @bounds.h) if r.y + r.h > @bounds.y + @bounds.h
     d = r.y - @bounds.y if r.y - d < @bounds.y
-    scroll_by(d)
+    # Laid out at once (rare: focus changes) so the caller sees the new bounds; wheel steps stay O(1).
+    if scroll_by(d)
+      if c = @canvas
+        place_child(c)
+      end
+    end
   end
 
-  # Moves the content and, unlike a plain invalidate, lays it out at once: hit-testing
-  # (hover after a wheel step, a Tab that reveals) must see the new positions before the next frame.
+  # Moves the offset; the next frame lays the content out. False if nothing moved.
   def scroll_by(d : Float32) : Bool
     old = @offset
     @offset += d
     clamp
     return false if @offset == old
     invalidate
-    if c = @canvas
-      place_child(c)
-    end
     true
   end
 
