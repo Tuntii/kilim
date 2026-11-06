@@ -1,0 +1,52 @@
+# Inbox: values sent from two parallel tasks all arrive, once each, in each sender's
+# order; every send wakes; nothing is queued or woken once the window is gone.
+
+module test/inbox_test
+
+import std/mutex::{Mutex}
+import std/shared_proc::{SharedProc}
+import kilim/inbox::{Inbox}
+import kilim/testing::*
+
+N = 500
+
+def main : Int32
+  wakes = Atomic(Int32).new(0)
+  gone = Mutex.new { false }
+  box = Inbox(Int32).new(SharedProc(Nil, Nil).of { |_x| wakes.add(1); nil }, gone)
+  group do |g|
+    g.spawn_parallel { N.times { |i| box.send(i) }; nil }
+    g.spawn_parallel { N.times { |i| box.send(1000 + i) }; nil }
+  end
+  got = box.take
+  expect_eq got.size, 2 * N, "values received"
+  expect_eq wakes.get, 2 * N, "one wake per send"
+  a = -1
+  b = 999
+  ok = true
+  # Each sender's values are consecutive, so in-order and complete means each once.
+  got.each do |v|
+    if v < 1000
+      ok = false unless v == a + 1
+      a = v
+    else
+      ok = false unless v == b + 1
+      b = v
+    end
+  end
+  expect ok, "each sender's values arrive once, in send order"
+  expect_eq a, N - 1, "last value of the first sender"
+  expect_eq b, 1000 + N - 1, "last value of the second sender"
+  expect_eq box.take.size, 0, "take empties the queue"
+
+  # After the window closed: accepted, dropped, no wake.
+  gone.update { |_g| true }
+  box.send(7)
+  expect_eq box.take.size, 0, "a send after close is dropped"
+  expect_eq wakes.get, 2 * N, "a send after close does not wake"
+
+  puts "inbox ok"
+  0
+end
+
+exit main

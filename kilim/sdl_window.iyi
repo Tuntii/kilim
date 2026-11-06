@@ -11,7 +11,10 @@ import kilim/event::*
 import kilim/widget::{Widget}
 import kilim/ui::{Ui}
 import kilim/timers::{Pacer}
+import kilim/inbox::{Inbox}
 import kilim/theme::*
+import std/mutex::{Mutex}
+import std/shared_proc::{SharedProc}
 
 # primary: Cmd on macOS, Ctrl elsewhere. Ctrl+Alt together means AltGr
 # (that's how it arrives on Windows; Polish AltGr+C = ć, Hungarian AltGr+V = @): not a shortcut.
@@ -44,6 +47,11 @@ pub class SdlWindow
     @closed = false
     @text_input = false
     @pacer = Pacer.new
+    @gone = Mutex.new { false }
+    @inboxes = [] of -> Nil
+    # The event every inbox pushes to wake the loop.
+    @wake_type = LibSDL3.SDL_RegisterEvents(1)
+    sdl_fatal("SDL_RegisterEvents") if @wake_type == 0_u32
     # Every ivar must be filled before handing out self.
     @watch_box = Pointer(Void).new(0_u64)
     # Live resize: on Windows/macOS the event loop stalls during a drag,
@@ -76,6 +84,7 @@ pub class SdlWindow
       @ui.blink if @pacer.blink?(now, @ui.wants_text_input?, !got)
       @pacer.timers.fire(now)
       drain
+      deliver
       present
     end
     close
@@ -85,6 +94,7 @@ pub class SdlWindow
   pub def step : Nil
     @pacer.timers.fire(clock_ms)
     drain
+    deliver
     present
   end
 
@@ -100,6 +110,21 @@ pub class SdlWindow
 
   pub def cancel_timer(id : Int32) : Nil
     @pacer.timers.cancel(id)
+  end
+
+  # An inbox other threads send T values to; each wakes the loop, which hands it to the
+  # handler here on the UI thread (see WinWindow#inbox for the pattern).
+  # SDL_PushEvent is thread-safe.
+  pub def inbox(type : T.class, &handler : T -> Nil) : Inbox(T) forall T
+    t = @wake_type
+    box = Inbox(T).new(SharedProc(Nil, Nil).of { |_x| e = LibSDL3::Event.new; e.type = t; LibSDL3.SDL_PushEvent(pointerof(e)); nil }, @gone)
+    @inboxes << -> { box.take.each { |v| handler.call(v) }; nil }
+    box
+  end
+
+  # Hands values sent since the last pass to their handlers.
+  def deliver : Nil
+    @inboxes.each { |d| d.call }
   end
 
   def clock_ms : Int64
@@ -126,6 +151,8 @@ pub class SdlWindow
   pub def close : Nil
     return if @closed
     @closed = true
+    # Before SDL_Quit: from here sends are dropped, and none is mid-push.
+    @gone.update { |_g| true }
     LibSDL3.SDL_RemoveEventWatch(@watch, @watch_box)
     @canvas.close
     LibSDL3.SDL_DestroyRenderer(@renderer)
@@ -252,6 +279,10 @@ pub class SdlWindow
   @closed : Bool
   @text_input : Bool
   @pacer : Pacer
+  # Set by close, under its lock; shared with every inbox.
+  @gone : Mutex(Bool)
+  @inboxes : Array(-> Nil)
+  @wake_type : UInt32
   @watch : LibSDL3::EventFilter
   @watch_box : Void*
 end
