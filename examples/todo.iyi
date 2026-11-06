@@ -15,6 +15,8 @@ import kilim/checkbox::{Checkbox}
 import kilim/textbox::{Textbox}
 import kilim/scroll::{Scroll}
 import kilim/event::*
+import kilim/canvas::{Color}
+import kilim/theme::{PADDING, SELECTION}
 
 # The Delete button's closure only learns its own row after the row is built.
 class Slot
@@ -58,6 +60,12 @@ class App
       @list.remove(r)
     end
   end
+end
+
+# Same colour, within 2 per channel (colour conversion may round).
+def near?(p : UInt32, c : Color) : Bool
+  ch = ->(shift : Int32, v : UInt8) { (((p >> shift) & 0xFF_u32).to_i - v.to_i).abs <= 2 }
+  ch.call(16, c.r) && ch.call(8, c.g) && ch.call(0, c.b)
 end
 
 def fail(why : String) : NoReturn
@@ -106,8 +114,35 @@ def selftest(win : Window, app : App, bmp : String) : Nil
   click(win, app.dels[0])
   fail("#{app.list.children.size} rows after Delete, expected 30") unless app.list.children.size == 30
 
+  # Drag-select the start of the typed text.
+  click(win, app.input)
+  win.inject TextInput.new("Çalışma şöğüt")
   win.step
-  win.screenshot(bmp)
+  ib = app.input.bounds
+  y = ib.y + ib.h / 2
+  win.inject MouseDown.new(ib.x + PADDING + 1, y, MouseButton::Left)
+  win.inject MouseMove.new(ib.x + PADDING + 60, y)
+  win.inject MouseUp.new(ib.x + PADDING + 60, y, MouseButton::Left)
+
+  win.step
+  px = win.screenshot(bmp)
+  # Only the native backend returns pixels: the selection colour must show inside the box.
+  {% if flag?(:win32) && !flag?(:sdl) %}
+    d = win.density
+    w = (480 * d).round.to_i # the window is 480 logical units wide
+    hits = 0
+    yy = ib.y + 4
+    while yy < ib.y + ib.h - 4
+      xx = ib.x + PADDING
+      while xx < ib.x + PADDING + 60
+        p = px[(yy * d).to_i * w + (xx * d).to_i]
+        hits += 1 if near?(p, SELECTION)
+        xx += 1
+      end
+      yy += 1
+    end
+    fail("selection colour not found in the textbox (#{hits} pixels)") if hits < 100
+  {% end %}
   win.close
   puts "todo selftest ok"
 end

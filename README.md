@@ -114,8 +114,10 @@ Sent values must be `Share`: strings, numbers, `Share` structs. After the window
 closes, sends are dropped.
 
 **Keyboard.** Tab and Shift+Tab move focus. In a textbox, use the arrow keys,
-Home/End, Backspace/Delete and Enter, plus Ctrl/Cmd+V to paste. Ctrl/Cmd+C
-copies the whole text, because there is no selection yet. `window.shortcut(Key::N) { ... }`
+Home/End, Backspace/Delete and Enter. Click and drag, or hold Shift with the
+arrows, Home and End, to select; Ctrl/Cmd+A selects all, Ctrl/Cmd+C copies the
+selection (nothing is copied when it is empty), Ctrl/Cmd+X cuts it and
+Ctrl/Cmd+V pastes over it. `window.shortcut(Key::N) { ... }`
 runs a block on Ctrl/Cmd+N before the focused widget sees the key; with
 `primary: false` (a plain key such as Delete) it applies only while no text field
 is focused.

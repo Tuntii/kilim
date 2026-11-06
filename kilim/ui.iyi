@@ -125,6 +125,10 @@ pub class Ui < Context
     when MouseMove
       remember(e.x, e.y)
       set_hover(@root.hit(e.x, e.y))
+      # A held button means a drag: the capturing widget follows the pointer.
+      if c = @captured
+        c.handle(e, self)
+      end
     when MouseDown
       remember(e.x, e.y)
       set_hover(@root.hit(e.x, e.y))

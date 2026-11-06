@@ -6,6 +6,7 @@ import std/indexable
 
 pub class TextEdit
   getter cursor : Int32 = 0
+  getter anchor : Int32? = nil
 
   def initialize
     @chars = [] of Char
@@ -28,9 +29,11 @@ pub class TextEdit
     @chars.clear
     s.each_char { |ch| @chars << ch }
     @cursor = @chars.size
+    @anchor = nil
   end
 
   pub def insert(s : String) : Nil
+    delete_selection
     s.each_char do |ch|
       @chars.insert(@cursor, ch)
       @cursor += 1
@@ -38,30 +41,88 @@ pub class TextEdit
   end
 
   pub def backspace : Nil
+    return if delete_selection
     return if @cursor == 0
     @cursor -= 1
     @chars.delete_at(@cursor)
   end
 
   pub def delete : Nil
+    return if delete_selection
     return if @cursor >= @chars.size
     @chars.delete_at(@cursor)
   end
 
-  pub def left : Nil
-    @cursor -= 1 if @cursor > 0
+  # (start, end) with start < end; nil when nothing is selected.
+  pub def selection : Tuple(Int32, Int32)?
+    if a = @anchor
+      return nil if a == @cursor
+      return a < @cursor ? {a, @cursor} : {@cursor, a}
+    end
+    nil
   end
 
-  pub def right : Nil
-    @cursor += 1 if @cursor < @chars.size
+  pub def selected_text : String
+    if s = selection
+      return join(s[0], s[1])
+    end
+    ""
   end
 
-  pub def home : Nil
-    @cursor = 0
+  # Text of the first n characters.
+  pub def prefix(n : Int32) : String
+    join(0, n)
   end
 
-  pub def end_ : Nil
+  # Moves the cursor; with `grow` the selection grows from where it started.
+  pub def move_to(i : Int32, grow : Bool) : Nil
+    i = 0 if i < 0
+    i = @chars.size if i > @chars.size
+    if grow
+      @anchor = @cursor if @anchor.nil?
+    else
+      @anchor = nil
+    end
+    @cursor = i
+  end
+
+  pub def select_all : Nil
+    @anchor = 0
     @cursor = @chars.size
+  end
+
+  pub def delete_selection : Bool
+    s = selection
+    @anchor = nil
+    return false unless s
+    (s[1] - s[0]).times { @chars.delete_at(s[0]) }
+    @cursor = s[0]
+    true
+  end
+
+  # Without Shift, a selection collapses to its near edge instead of moving.
+  pub def left(grow : Bool = false) : Nil
+    if !grow && (s = selection)
+      move_to(s[0], false)
+    else
+      move_to(@cursor - 1, grow)
+    end
+  end
+
+  pub def right(grow : Bool = false) : Nil
+    if !grow && (s = selection)
+      move_to(s[1], false)
+    else
+      move_to(@cursor + 1, grow)
+    end
+  end
+
+  pub def home(grow : Bool = false) : Nil
+    move_to(0, grow)
+  end
+
+  pub def end_(grow : Bool = false) : Nil
+    move_to(@chars.size, grow)
   end
 
   def join(from : Int32, upto : Int32) : String
