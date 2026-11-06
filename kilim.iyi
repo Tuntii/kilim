@@ -18,6 +18,7 @@ pub import kilim/text_area
 pub import kilim/scroll
 pub import kilim/list_view
 pub import kilim/dropdown
+pub import kilim/dialog
 pub import kilim/event
 pub import kilim/window
 
@@ -77,6 +78,18 @@ pub def dropdown(options : Array(String), selected : Int32 = 0, on_change : (Int
   d = Kilim::Dropdown::Dropdown.new(options, selected, on_change)
   d.sizing = sizing
   d
+end
+
+# Asks before doing something: Cancel / ok_text over a dimmed window. Enter or the OK button runs the block,
+# Escape or Cancel just closes. OK has the focus when it opens, so Enter alone confirms.
+pub def confirm(ui : Kilim::Widget::Context, title : String, message : String, ok_text : String = "OK", &on_ok : -> Nil) : Nil
+  d = Kilim::Dialog::Dialog.new(title, message, ok_text, ->(ok : Bool) {
+    ui.close_modal
+    on_ok.call if ok
+    nil
+  })
+  ui.show_modal(d)
+  ui.focus(d.ok)
 end
 
 pub def fit : Kilim::Widget::Sizing

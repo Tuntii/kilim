@@ -1,0 +1,74 @@
+# Confirmation dialog: the widget Kilim.confirm shows with Ui#show_modal.
+
+module kilim/dialog
+
+import std/float
+import kilim/geom::{Size}
+import kilim/canvas::{Canvas, Color}
+import kilim/event::*
+import kilim/widget::*
+import kilim/box::*
+import kilim/button::{Button}
+import kilim/list_view::{ellipsize}
+import kilim/theme::*
+
+pub DIALOG_MAX_W = 360_f32
+DIALOG_PAD = 16_f32
+
+# One line of text that asks for at most `max` and is cut with "…" if it gets less.
+class Line < Widget
+  def initialize(@text : String, @color : Color, @max : Float32)
+  end
+
+  pub def preferred(c : Canvas) : Size
+    m = c.measure(@text)
+    Size.new(m.w < @max ? m.w : @max, m.h)
+  end
+
+  pub def draw(c : Canvas) : Nil
+    c.text(bounds.x, bounds.y, ellipsize(c, @text, bounds.w), @color)
+  end
+
+  @text : String
+  @color : Color
+  @max : Float32
+end
+
+pub class Dialog < Box
+  getter ok : Button
+  getter cancel : Button
+
+  # `done` runs when the dialog is finished: true for OK. The caller closes the modal in it.
+  def initialize(title : String, message : String, ok_text : String, @done : Bool -> Nil)
+    done = @done
+    @cancel = Button.new("Cancel", -> { done.call(false) })
+    @ok = Button.new(ok_text, -> { done.call(true) })
+    inner = DIALOG_MAX_W - 2 * DIALOG_PAD
+    spacer = Box.new(Axis::Row, [] of Widget, sizing: Sizing.fill)
+    buttons = Box.new(Axis::Row, [spacer, @cancel, @ok] of Widget, spacing: PADDING)
+    kids = [Line.new(title, FG, inner), Line.new(message, MUTED, inner), buttons] of Widget
+    super(Axis::Column, kids, DIALOG_PAD, 12_f32)
+  end
+
+  pub def draw(c : Canvas) : Nil
+    c.fill_rect(bounds, POPUP_BG)
+    super
+    c.stroke_rect(bounds, BORDER)
+  end
+
+  # Reached when the focused widget did not take the key: Escape is Cancel, Enter is OK.
+  pub def handle(e : Event, ui : Context) : Bool
+    return false unless e.is_a?(KeyDown)
+    if e.key.escape?
+      @done.call(false)
+      true
+    elsif e.key.enter?
+      @done.call(true)
+      true
+    else
+      false
+    end
+  end
+
+  @done : Bool -> Nil
+end
