@@ -21,8 +21,51 @@ class Dummy < Widget
   end
 end
 
+# What Widget#hit does, spelled out: the reference for Box's binary search.
+def linear_hit(b : Box, x : Float32, y : Float32) : Widget?
+  return nil unless b.bounds.contains?(x, y)
+  kids = b.children
+  i = kids.size - 1
+  while i >= 0
+    if h = kids[i].hit(x, y)
+      return h
+    end
+    i -= 1
+  end
+  b
+end
+
+def check_hits(axis : Axis, n : Int32) : Nil
+  kids = [] of Widget
+  n.times do |i|
+    d = Dummy.new(40_f32, 20_f32)
+    # A few zero-size and varying children: the search must skip them like the scan does.
+    d.sizing = Sizing.fixed(i % 97 == 0 ? 0_f32 : 12_f32 + (i % 5))
+    kids << d
+  end
+  box = Box.new(axis, kids, 4_f32, 3_f32)
+  rc = RecordCanvas.new
+  box.layout(Rect.new(10_f32, 20_f32, 100_f32, 100_f32 + n * 17_f32), rc)
+  seed = 12345_u32
+  span = n * 17_f32 + 150_f32
+  100.times do
+    seed = seed &* 1103515245_u32 &+ 12345_u32
+    a = ((seed >> 8) % 100000_u32).to_f32 / 100000_f32
+    seed = seed &* 1103515245_u32 &+ 12345_u32
+    c = ((seed >> 8) % 100000_u32).to_f32 / 100000_f32
+    main = a * span - 20_f32
+    cross = c * 140_f32 - 10_f32
+    x = axis.row? ? main + 10_f32 : cross
+    y = axis.row? ? cross + 20_f32 : main
+    expect box.hit(x, y) == linear_hit(box, x, y), "binary search matches the linear scan at #{x},#{y}"
+  end
+end
+
 def main : Int32
   rc = RecordCanvas.new
+
+  check_hits(Axis::Column, 10000)
+  check_hits(Axis::Row, 2000)
 
   # Column: Fixed(20) + Fill + Fill, padding 10, spacing 5
   a = Dummy.new
