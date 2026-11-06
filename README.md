@@ -110,7 +110,9 @@ end
 `send` is the only kilim call allowed from another thread: a parallel task
 cannot touch the window or its widgets (the compiler refuses it), only the inbox.
 Sent values must be `Share`: strings, numbers, `Share` structs. After the window
-closes, sends are dropped.
+closes, sends are dropped. On Linux a send cannot wake the loop (iyi's worker
+threads there must not call C libraries such as SDL), so while a window has an
+inbox its loop checks for values every 10 ms instead.
 
 **Keyboard.** Tab and Shift+Tab move focus. In a textbox, use the arrow keys,
 Home/End, Backspace/Delete and Enter, plus Ctrl/Cmd+V to paste. Ctrl/Cmd+C
