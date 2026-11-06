@@ -13,7 +13,10 @@ import kilim/event::*
 import kilim/widget::{Widget}
 import kilim/ui::{Ui}
 import kilim/timers::{Pacer}
+import kilim/inbox::{Inbox}
 import kilim/theme::*
+import std/mutex::{Mutex}
+import std/shared_proc::{SharedProc}
 
 CLASS_NAME = wide("kilim")
 
@@ -40,6 +43,8 @@ pub class WinWindow
     @closed = false
     @text_input = false
     @pacer = Pacer.new
+    @gone = Mutex.new { false }
+    @inboxes = [] of -> Nil
     @high_surrogate = 0_u16
     # Every ivar must be filled before handing out self. The box lives in this ivar:
     # the window's only other copy is GWLP_USERDATA, invisible to the GC.
@@ -100,6 +105,7 @@ pub class WinWindow
       @ui.blink if @pacer.blink?(now, @ui.wants_text_input?, idle)
       @pacer.timers.fire(now)
       drain
+      deliver
       present
     end
     close
@@ -109,6 +115,7 @@ pub class WinWindow
   pub def step : Nil
     @pacer.timers.fire(clock_ms)
     drain
+    deliver
     present
   end
 
@@ -124,6 +131,22 @@ pub class WinWindow
 
   pub def cancel_timer(id : Int32) : Nil
     @pacer.timers.cancel(id)
+  end
+
+  # An inbox other threads send T values to; each wakes the loop, which hands it to the
+  # handler here on the UI thread. Pattern: a spawn_parallel block may capture only
+  # Share values, so it cannot touch this window or its widgets; it captures the
+  # (Share) inbox, and the handler, which never leaves this thread, may.
+  pub def inbox(type : T.class, &handler : T -> Nil) : Inbox(T) forall T
+    hwnd = @handle.address
+    box = Inbox(T).new(SharedProc(Nil, Nil).of { |_x| LibWin.PostMessageW(Pointer(Void).new(hwnd), WM_APP, 0_u64, 0_i64); nil }, @gone)
+    @inboxes << -> { box.take.each { |v| handler.call(v) }; nil }
+    box
+  end
+
+  # Hands values sent since the last pass to their handlers.
+  def deliver : Nil
+    @inboxes.each { |d| d.call }
   end
 
   def clock_ms : Int64
@@ -148,6 +171,8 @@ pub class WinWindow
   pub def close : Nil
     return if @closed
     @closed = true
+    # Before the window goes: from here sends are dropped, and none is mid-wake.
+    @gone.update { |_g| true }
     @canvas.close
     LibWin.DestroyWindow(@handle)
   end
@@ -161,6 +186,9 @@ pub class WinWindow
       return 0_i64
     when WM_ERASEBKGND
       return 1_i64
+    when WM_APP
+      # An inbox's wake; the loop delivers after its drain.
+      return 0_i64
     when WM_PAINT
       LibWin.ValidateRect(hwnd, Pointer(LibWin::RectI).new(0_u64))
       redraw
@@ -357,6 +385,9 @@ pub class WinWindow
   @closed : Bool
   @text_input : Bool
   @pacer : Pacer
+  # Set by close, under its lock; shared with every inbox.
+  @gone : Mutex(Bool)
+  @inboxes : Array(-> Nil)
   @high_surrogate : UInt16
   @box : Void*
 end

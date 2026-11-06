@@ -11,7 +11,13 @@ import kilim/event::*
 import kilim/widget::{Widget}
 import kilim/ui::{Ui}
 import kilim/timers::{Pacer}
+import kilim/inbox::{Inbox}
 import kilim/theme::*
+import std/mutex::{Mutex}
+import std/shared_proc::{SharedProc}
+
+# How often run checks the inboxes on Linux, where a send cannot wake it (SdlWindow#inbox).
+INBOX_POLL_MS = 10
 
 # primary: Cmd on macOS, Ctrl elsewhere. Ctrl+Alt together means AltGr
 # (that's how it arrives on Windows; Polish AltGr+C = ć, Hungarian AltGr+V = @): not a shortcut.
@@ -44,12 +50,19 @@ pub class SdlWindow
     @closed = false
     @text_input = false
     @pacer = Pacer.new
+    @gone = Mutex.new { false }
+    @inboxes = [] of -> Nil
+    # The event every inbox pushes to wake the loop.
+    @wake_type = LibSDL3.SDL_RegisterEvents(1)
+    sdl_fatal("SDL_RegisterEvents") if @wake_type == 0_u32
     # Every ivar must be filled before handing out self.
     @watch_box = Pointer(Void).new(0_u64)
     # Live resize: on Windows/macOS the event loop stalls during a drag,
     # but the SDL watch is called synchronously on every event. This is kilim's only
     # C -> iyi callback. Not a closure; the state is carried by userdata.
     @watch = ->(data : Void*, ev : LibSDL3::Event*) do
+      # Also called on a sender's thread for an inbox's wake (SDL_PushEvent runs watches
+      # there), so for any other event it must not touch the window.
       t = ev.value.type
       if t == LibSDL3::EVENT_WINDOW_RESIZED || t == LibSDL3::EVENT_WINDOW_EXPOSED
         Box(SdlWindow).unbox(data).redraw
@@ -70,12 +83,16 @@ pub class SdlWindow
     present
     until @quit
       wait = @pacer.wait_ms(clock_ms, @ui.wants_text_input?)
+      {% if flag?(:linux) %}
+        wait = INBOX_POLL_MS if !@inboxes.empty? && (wait < 0 || wait > INBOX_POLL_MS)
+      {% end %}
       got = wait < 0 ? LibSDL3.SDL_WaitEvent(pointerof(@event)) : LibSDL3.SDL_WaitEventTimeout(pointerof(@event), wait)
       handle_event if got
       now = clock_ms
       @ui.blink if @pacer.blink?(now, @ui.wants_text_input?, !got)
       @pacer.timers.fire(now)
       drain
+      deliver
       present
     end
     close
@@ -85,6 +102,7 @@ pub class SdlWindow
   pub def step : Nil
     @pacer.timers.fire(clock_ms)
     drain
+    deliver
     present
   end
 
@@ -100,6 +118,34 @@ pub class SdlWindow
 
   pub def cancel_timer(id : Int32) : Nil
     @pacer.timers.cancel(id)
+  end
+
+  # An inbox other threads send T values to; each wakes the loop, which hands it to the
+  # handler here on the UI thread (see WinWindow#inbox for the pattern).
+  pub def inbox(type : T.class, &handler : T -> Nil) : Inbox(T) forall T
+    box = Inbox(T).new(wake, @gone)
+    @inboxes << -> { box.take.each { |v| handler.call(v) }; nil }
+    box
+  end
+
+  # What an inbox calls on the sender's thread after queueing a value.
+  def wake : SharedProc(Nil, Nil)
+    {% if flag?(:linux) %}
+      # shortcut: iyi starts its Linux worker threads with a raw clone, without glibc's
+      # thread setup, so a sender must not call C (SDL_PushEvent's X11 wake crashed
+      # there); run polls the inboxes every INBOX_POLL_MS instead. Upgrade when iyi
+      # workers can call C on Linux, or a wake made only of syscalls is possible.
+      SharedProc(Nil, Nil).of { |_x| nil }
+    {% else %}
+      # SDL_PushEvent is thread-safe.
+      t = @wake_type
+      SharedProc(Nil, Nil).of { |_x| e = LibSDL3::Event.new; e.type = t; LibSDL3.SDL_PushEvent(pointerof(e)); nil }
+    {% end %}
+  end
+
+  # Hands values sent since the last pass to their handlers.
+  def deliver : Nil
+    @inboxes.each { |d| d.call }
   end
 
   def clock_ms : Int64
@@ -126,6 +172,8 @@ pub class SdlWindow
   pub def close : Nil
     return if @closed
     @closed = true
+    # Before SDL_Quit: from here sends are dropped, and none is mid-push.
+    @gone.update { |_g| true }
     LibSDL3.SDL_RemoveEventWatch(@watch, @watch_box)
     @canvas.close
     LibSDL3.SDL_DestroyRenderer(@renderer)
@@ -252,6 +300,10 @@ pub class SdlWindow
   @closed : Bool
   @text_input : Bool
   @pacer : Pacer
+  # Set by close, under its lock; shared with every inbox.
+  @gone : Mutex(Bool)
+  @inboxes : Array(-> Nil)
+  @wake_type : UInt32
   @watch : LibSDL3::EventFilter
   @watch_box : Void*
 end

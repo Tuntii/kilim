@@ -1,0 +1,43 @@
+# Values handed to the UI thread from other threads. A worker sends; the window, on
+# its next loop pass, gives each value to the handler the inbox was made with. The
+# handler stays with the window (it touches widgets, so it is not Share), and this
+# object holds only Share state, so a spawn_parallel block may capture it.
+
+module kilim/inbox
+
+import std/indexable
+import std/list::{List}
+import std/mutex::{Mutex}
+import std/shared_proc::{SharedProc}
+
+pub class Inbox(T)
+  # wake: wakes the window's loop, from any thread. gone: the window's flag, set by
+  # close; shared by all its inboxes.
+  def initialize(@wake : SharedProc(Nil, Nil), @gone : Mutex(Bool))
+    @queue = Mutex.new { [] of T }
+  end
+
+  # The one kilim call allowed from another thread. T must be Share (the compiler
+  # says so here). Dropped once the window has closed; the wake runs under the
+  # window's lock, so close cannot destroy the window between the check and the wake.
+  pub def send(value : T) : Nil
+    @gone.lock do |gone|
+      unless gone
+        @queue.lock { |q| q << value }
+        @wake.call(nil)
+      end
+    end
+    nil
+  end
+
+  # For the window, on the UI thread: everything sent so far, in send order.
+  pub def take : List(T)
+    taken = @queue.get { |q| l = List(T).new(q); q.clear; l }
+    return taken if taken.is_a?(List(T))
+    List(T).new([] of T)
+  end
+
+  @wake : SharedProc(Nil, Nil)
+  @gone : Mutex(Bool)
+  @queue : Mutex(Array(T))
+end

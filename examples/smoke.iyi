@@ -1,6 +1,7 @@
 # End-to-end check of the SDL backend: opens a window with a Label and a Button,
 # injects Tab + Space, exercises the live resize path (event watch),
-# saves smoke.bmp and ends the run loop with QUIT. On success it prints
+# saves smoke.bmp, hands values sent from other threads to the UI thread (Inbox) and
+# ends the run loop with a QUIT sent that way. On success it prints
 # `smoke ok` and exits 0; otherwise it prints the reason and exits 1.
 # On Windows build it with -Dsdl (the native backend has examples/smoke_win32.iyi).
 
@@ -52,10 +53,17 @@ def push_key(key : UInt32) : Nil
   push(e)
 end
 
+def push_quit : Nil
+  e = LibSDL3::Event.new
+  e.type = LibSDL3::EVENT_QUIT
+  push(e)
+end
+
 def main : Int32
   n = Counter.new
   button = Button.new("OK", -> { n.n += 1; nil })
-  root = Box.new(Axis::Column, [Label.new("Merhaba şöğüt"), button] of Widget, padding: PAD, spacing: 8_f32)
+  title = Label.new("Merhaba şöğüt")
+  root = Box.new(Axis::Column, [title, button] of Widget, padding: PAD, spacing: 8_f32)
   win = Window.new("smoke", 320, 200, root)
   win.step
 
@@ -105,15 +113,42 @@ def main : Int32
   fail("timer ran #{ticks - seen} more times after cancel_timer") unless ticks == seen
   puts "timers: ok (#{seen} ticks)"
 
-  # run's pending loop must end on QUIT (and close the window).
-  # a timer sends it, which also shows a timer wakes a loop that would otherwise wait forever.
-  win.after(30) do
-    quit = LibSDL3::Event.new
-    quit.type = LibSDL3::EVENT_QUIT
-    LibSDL3.SDL_PushEvent(pointerof(quit))
-    nil
+  # Inbox: a value sent from another thread reaches its handler on the UI thread.
+  results = win.inbox(String) { |s| title.text = s; nil }
+  group do |g|
+    g.spawn_parallel { sleep(20); results.send("done"); nil }
+    t0 = LibSDL3.SDL_GetTicks
+    while title.text != "done" && LibSDL3.SDL_GetTicks - t0 < 2000_u64
+      win.step
+    end
   end
-  win.run
+  fail("label after the inbox send is #{title.text.inspect}, expected \"done\"") unless title.text == "done"
+  puts "inbox: ok"
+
+  # run's pending loop must end on QUIT (and close the window). The first timer shows a
+  # timer wakes the wait; after it only a send from another thread can, and that
+  # handler pushes QUIT. It must run soon after the send (60 ms): any later wake
+  # (a timer's timeout ending early, a stray event) would deliver it too. The 1 s
+  # timer only keeps a broken wake from hanging the test.
+  ticked = false
+  took = -1_i64
+  win.after(30) { ticked = true; nil }
+  win.after(1000) { push_quit; nil }
+  t0 = LibSDL3.SDL_GetTicks
+  closer = win.inbox(String) { |_s| took = (LibSDL3.SDL_GetTicks - t0).to_i64; push_quit; nil }
+  group do |g|
+    g.spawn_parallel { sleep(60); closer.send("close"); nil }
+    win.run
+  end
+  fail("the timer did not wake the loop") unless ticked
+  fail("a send from another thread did not wake the loop (handler ran at #{took} ms)") unless took >= 0 && took < 200
+  puts "inbox wake: #{took} ms"
+
+  # Closed: a send is accepted and dropped, so no handler can touch the closed window.
+  closer.send("late")
+  results.send("late")
+  fail("a send after close was queued") unless closer.take.size == 0 && results.take.size == 0
+  fail("a handler ran after close") unless title.text == "done"
   puts "smoke ok"
   0
 end

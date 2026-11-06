@@ -5,7 +5,8 @@
 # from a (simulated) lost GPU device, exercises the live resize path (WM_SIZE
 # redraws from the window procedure) and a move to a 150 % display
 # (WM_DPICHANGED), saves smoke_win32.bmp at that scale and checks its pixels, and
-# ends the run loop with WM_CLOSE. Prints `smoke ok` and exits 0, or the reason and 1.
+# hands values sent from other threads to the UI thread (Inbox), ending the run loop
+# with a WM_CLOSE sent that way. Prints `smoke ok` and exits 0, or the reason and 1.
 
 module examples/smoke_win32
 
@@ -70,7 +71,8 @@ def main : Int32
   n = Counter.new
   button = Button.new("OK", -> { n.n += 1; nil })
   input = Textbox.new
-  root = Box.new(Axis::Column, [Label.new("Merhaba şöğüt"), button, input] of Widget, padding: PAD, spacing: 8_f32)
+  title = Label.new("Merhaba şöğüt")
+  root = Box.new(Axis::Column, [title, button, input] of Widget, padding: PAD, spacing: 8_f32)
   win = Window.new("smoke", 320, 200, root)
   win.step
   canvas = win.canvas
@@ -212,10 +214,45 @@ def main : Int32
   fail("timer ran #{ticks - seen} more times after cancel_timer") unless ticks == seen
   puts "timers: ok (#{seen} ticks)"
 
-  # run's loop must end on WM_CLOSE (and close the window); a timer sends it, which
-  # also shows a timer wakes a loop that would otherwise wait forever.
-  win.after(30) { post(win, WM_CLOSE, 0_u64, 0_i64); nil }
-  win.run
+  # Inbox: a value sent from another thread reaches its handler on the UI thread.
+  results = win.inbox(String) { |s| title.text = s; nil }
+  group do |g|
+    g.spawn_parallel { sleep(20); results.send("done"); nil }
+    t0 = LibWin.GetTickCount64
+    while title.text != "done" && LibWin.GetTickCount64 - t0 < 2000_u64
+      win.step
+    end
+  end
+  fail("label after the inbox send is #{title.text.inspect}, expected \"done\"") unless title.text == "done"
+  puts "inbox: ok"
+
+  # run's loop must end on WM_CLOSE (and close the window). The first timer shows a
+  # timer wakes the wait; after it only a send from another thread can, and that
+  # handler sends WM_CLOSE. It must run soon after the send (60 ms): any later wake
+  # (a stray message came at ~280 ms here) would deliver it too. The 1 s timer only
+  # keeps a broken wake from hanging the test.
+  # Focus off the textbox, or the caret blink would wake the loop too.
+  win.inject KeyDown.new(Key::Tab, Mods.new)
+  fail("Tab did not move focus off the textbox") if win.ui.wants_text_input?
+  ticked = false
+  took = -1_i64
+  win.after(30) { ticked = true; nil }
+  win.after(1000) { post(win, WM_CLOSE, 0_u64, 0_i64); nil }
+  t0 = LibWin.GetTickCount64
+  closer = win.inbox(String) { |_s| took = (LibWin.GetTickCount64 - t0).to_i64; post(win, WM_CLOSE, 0_u64, 0_i64); nil }
+  group do |g|
+    g.spawn_parallel { sleep(60); closer.send("close"); nil }
+    win.run
+  end
+  fail("the timer did not wake the loop") unless ticked
+  fail("a send from another thread did not wake the loop (handler ran at #{took} ms)") unless took >= 0 && took < 200
+  puts "inbox wake: #{took} ms"
+
+  # Closed: a send is accepted and dropped, so no handler can touch the closed window.
+  closer.send("late")
+  results.send("late")
+  fail("a send after close was queued") unless closer.take.size == 0 && results.take.size == 0
+  fail("a handler ran after close") unless title.text == "done"
   puts "smoke ok"
   0
 end

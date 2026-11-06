@@ -195,6 +195,7 @@ lib ::LibSDL3
   fun SDL_WaitEvent(event : Event*) : Bool
   fun SDL_WaitEventTimeout(event : Event*, timeout_ms : Int32) : Bool
   fun SDL_PushEvent(event : Event*) : Bool
+  fun SDL_RegisterEvents(numevents : Int32) : UInt32
   fun SDL_AddEventWatch(filter : EventFilter, userdata : Void*) : Bool
   fun SDL_RemoveEventWatch(filter : EventFilter, userdata : Void*) : Void
   fun SDL_GetModState : UInt16

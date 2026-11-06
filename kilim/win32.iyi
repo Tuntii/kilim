@@ -230,6 +230,7 @@ pub WM_MBUTTONDOWN   = 0x0207_u32
 pub WM_MBUTTONUP     = 0x0208_u32
 pub WM_MOUSEWHEEL    = 0x020A_u32
 pub WM_DPICHANGED    = 0x02E0_u32
+pub WM_APP           = 0x8000_u32
 
 pub VK_BACK    = 0x08_u64
 pub VK_TAB     = 0x09_u64
