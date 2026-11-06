@@ -144,6 +144,17 @@ pub abstract class Widget
     self
   end
 
+  # Asks the nearest Scroll ancestor to make r visible (Scroll overrides this).
+  pub def reveal(r : Rect) : Nil
+    if p = @parent
+      p.reveal(r)
+    end
+  end
+
+  pub def reveal : Nil
+    reveal(@bounds)
+  end
+
   pub def attached_to?(r : Widget) : Bool
     root == r
   end

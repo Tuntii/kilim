@@ -33,6 +33,20 @@ def main : Int32
   expect ui.focused.nil? && ui.captured.nil? && ui.hovered.nil?, "no reference left to the removed widget"
   ui.frame
 
+  # The hovered widget goes away while another one moves under the pointer.
+  a = Button.new("a")
+  b = Button.new("b")
+  col = Box.new(Axis::Column, [a, b] of Widget)
+  ui = Ui.new(col, rc, MemoryClipboard.new)
+  ui.resize(300_f32, 200_f32)
+  ui.frame
+  ui.dispatch MouseMove.new(a.bounds.x + 2, a.bounds.y + 2)
+  expect ui.hovered == a, "a hovered"
+  col.remove(a)
+  ui.frame
+  expect ui.hovered == b, "b is hovered once it moves under the pointer"
+  expect b.hovered, "b knows it is hovered"
+
   puts "removal ok"
   0
 end
