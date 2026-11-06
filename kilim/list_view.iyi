@@ -1,0 +1,226 @@
+# Selectable list: header rows, one- or two-line rows, keyboard navigation. One widget for all rows,
+# so it keeps row tops in a prefix-sum array and draws and hit-tests only the rows it needs.
+
+module kilim/list_view
+
+import std/float
+import kilim/geom::{Rect, Size}
+import kilim/canvas::{Canvas}
+import kilim/event::*
+import kilim/widget::*
+import kilim/scroll::{Scroll}
+import kilim/theme::*
+
+pub struct ListRow
+  getter title : String
+  getter detail : String
+  getter header : Bool
+  # An app id; `rows=` keeps the selection on the row with the same key.
+  getter key : String
+
+  def initialize(@title : String, @detail : String = "", @header : Bool = false, @key : String = "")
+  end
+end
+
+# s cut with a trailing "…" so that it fits width; unchanged if it already fits.
+pub def ellipsize(c : Canvas, s : String, width : Float32) : String
+  return s if c.measure(s).w <= width
+  lo = 0
+  hi = s.size
+  while lo < hi
+    mid = (lo + hi + 1) // 2
+    if c.measure(s[0, mid] + "…").w <= width
+      lo = mid
+    else
+      hi = mid - 1
+    end
+  end
+  s[0, lo] + "…"
+end
+
+pub class ListView < Widget
+  getter rows : Array(ListRow) = [] of ListRow
+  getter selected : Int32? = nil
+  property on_select : (Int32 -> Nil)?
+
+  def initialize(@on_select : (Int32 -> Nil)? = nil)
+    self.sizing = Sizing.fill
+  end
+
+  pub def focusable? : Bool
+    true
+  end
+
+  pub def rows=(rows : Array(ListRow)) : Nil
+    key = ""
+    if i = @selected
+      key = @rows[i].key
+    end
+    @rows = rows
+    @selected = nil
+    unless key.empty?
+      j = rows.index { |r| !r.header && r.key == key }
+      @selected = j
+    end
+    @dirty = true
+    invalidate
+  end
+
+  # Programmatic selection; does not call on_select.
+  pub def selected=(i : Int32?) : Nil
+    @selected = i
+    invalidate
+  end
+
+  pub def preferred(c : Canvas) : Size
+    measure_rows(c)
+    Size.new(TEXTBOX_MIN_W, @tops.last)
+  end
+
+  pub def layout(r : Rect, c : Canvas) : Nil
+    @bounds = r
+    @canvas = c
+    measure_rows(c)
+  end
+
+  def measure_rows(c : Canvas) : Nil
+    return unless @dirty || c.line_height != @lh
+    @lh = c.line_height
+    @tops = [0_f32]
+    y = 0_f32
+    @rows.each do |r|
+      y += (r.header || r.detail.empty?) ? @lh + PADDING : 2 * @lh + PADDING
+      @tops << y
+    end
+    @dirty = false
+  end
+
+  # The row containing content-y y (0 = top of the list), or nil outside.
+  def row_at(y : Float32) : Int32?
+    return nil if @rows.empty? || y < 0 || y >= @tops.last
+    lo = 0
+    hi = @rows.size - 1
+    while lo < hi
+      mid = (lo + hi + 1) // 2
+      if @tops[mid] <= y
+        lo = mid
+      else
+        hi = mid - 1
+      end
+    end
+    lo
+  end
+
+  def row_rect(i : Int32) : Rect
+    Rect.new(@bounds.x, @bounds.y + @tops[i], @bounds.w, @tops[i + 1] - @tops[i])
+  end
+
+  # The viewport that shows this list: the nearest Scroll's bounds, else our own.
+  def viewport : Rect
+    p = @parent
+    while p
+      if p.is_a?(Scroll)
+        return p.bounds
+      end
+      p = p.parent
+    end
+    @bounds
+  end
+
+  pub def draw(c : Canvas) : Nil
+    return if @rows.empty?
+    measure_rows(c)
+    vp = viewport
+    first = row_at(vp.y - @bounds.y) || (vp.y < @bounds.y ? 0 : @rows.size - 1)
+    last = row_at(vp.y + vp.h - @bounds.y) || (@rows.size - 1)
+    i = first
+    while i <= last
+      rr = row_rect(i)
+      draw_row(c, i, rr) if c.visible?(rr)
+      i += 1
+    end
+  end
+
+  def draw_row(c : Canvas, i : Int32, rr : Rect) : Nil
+    r = @rows[i]
+    w = rr.w - 2 * PADDING
+    if r.header
+      c.text(rr.x + PADDING, rr.y + PADDING / 2, ellipsize(c, r.title, w), MUTED)
+      return
+    end
+    if @selected == i
+      c.fill_rect(rr, ROW_SELECTED)
+      c.stroke_rect(rr, FOCUS_RING) if focused
+    end
+    c.text(rr.x + PADDING, rr.y + PADDING / 2, ellipsize(c, r.title, w), FG)
+    c.text(rr.x + PADDING, rr.y + PADDING / 2 + c.line_height, ellipsize(c, r.detail, w), MUTED) unless r.detail.empty?
+  end
+
+  pub def handle(e : Event, ui : Context) : Bool
+    case e
+    when MouseDown
+      return false unless e.button.left?
+      if i = row_at(e.y - @bounds.y)
+        choose(i) unless @rows[i].header
+      end
+      true
+    when KeyDown
+      return false if @rows.empty?
+      case e.key
+      when .down?
+        step(1)
+      when .up?
+        step(-1)
+      when .page_down?
+        page(1)
+      when .page_up?
+        page(-1)
+      else
+        return false
+      end
+      true
+    else
+      false
+    end
+  end
+
+  # First non-header row from i going in dir, or nil.
+  def selectable(i : Int32, dir : Int32) : Int32?
+    while i >= 0 && i < @rows.size
+      return i unless @rows[i].header
+      i += dir
+    end
+    nil
+  end
+
+  def step(dir : Int32) : Nil
+    cur = @selected || (dir > 0 ? -1 : @rows.size)
+    if j = selectable(cur + dir, dir)
+      choose(j)
+    end
+  end
+
+  # Moves about one viewport; lands on the nearest selectable row, never backwards.
+  def page(dir : Int32) : Nil
+    cur = @selected || (dir > 0 ? -1 : @rows.size)
+    base = @selected ? @tops[cur] : (dir > 0 ? 0_f32 : @tops.last)
+    t = row_at(base + dir * viewport.h) || (dir > 0 ? @rows.size - 1 : 0)
+    j = selectable(t, dir) || selectable(t, -dir)
+    return unless j
+    choose(j) if dir > 0 ? j > cur : j < cur
+  end
+
+  def choose(i : Int32) : Nil
+    @selected = i
+    invalidate
+    reveal(row_rect(i))
+    if f = @on_select
+      f.call(i)
+    end
+  end
+
+  @tops : Array(Float32) = [0_f32]
+  @lh : Float32 = 0_f32
+  @dirty : Bool = true
+  @canvas : Canvas? = nil
+end

@@ -9,6 +9,7 @@ import kilim/box::{Box, Axis}
 import kilim/button::{Button}
 import kilim/checkbox::{Checkbox}
 import kilim/scroll::{Scroll}
+import kilim/list_view::{ListView, ListRow}
 
 # Root column with a scrolled list of `n` rows: [checkbox(text, fill), "Delete"].
 # Built from the widget classes, not the `Kilim` builders, so that the core
@@ -64,4 +65,15 @@ end
 
 def fmt(ms : Float64) : String
   ((ms * 1000).round / 1000).to_s
+end
+
+# Root column holding a scrolled ListView of `n` two-line rows.
+pub def list_tree(n : Int32) : Box
+  lv = ListView.new
+  rows = [] of ListRow
+  n.times { |i| rows << ListRow.new("Task #{i + 1}: profile the renderer", "second line #{i}", key: "k#{i}") }
+  lv.rows = rows
+  scroll = Scroll.new(lv)
+  scroll.sizing = Sizing.fill
+  Box.new(Axis::Column, [scroll] of Widget, 12_f32, 8_f32)
 end

@@ -4,12 +4,12 @@
 
 module bench/render
 
-import bench/timing::{todo_tree, set_row_text, header, measure}
+import bench/timing::{todo_tree, list_tree, set_row_text, header, measure}
 import kilim
 import kilim/widget::{Widget, Sizing}
 import kilim/box::{Box, Axis}
 import kilim/textbox::{Textbox}
-import kilim/event::{TextInput}
+import kilim/event::{TextInput, MouseMove}
 import kilim/window::{BACKEND}
 
 def main : Int32
@@ -57,6 +57,21 @@ def main : Int32
       nil
     })
     win2.close
+  end
+
+  [1000, 10000].each do |n|
+    root = list_tree(n)
+    win = Kilim.window("kilim bench", 480, 420, root)
+    win.step
+    measure("ListView full frame (layout + draw + present)", n, 3000.0, -> { root.invalidate; win.step; nil })
+    measure("ListView 100 mouse moves", n, 3000.0, -> {
+      50.times do
+        win.inject MouseMove.new(40_f32, 70_f32)
+        win.inject MouseMove.new(40_f32, 110_f32)
+      end
+      nil
+    })
+    win.close
   end
   0
 end

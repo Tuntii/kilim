@@ -1,0 +1,126 @@
+# ListView: selection, keyboard navigation, headers, ellipsis, reveal.
+
+module test/list_view_test
+
+import kilim/geom::{Rect, Size}
+import kilim/event::*
+import kilim/widget::*
+import kilim/box::*
+import kilim/ui::{Ui}
+import kilim/scroll::{Scroll}
+import kilim/list_view::*
+import kilim/testing::*
+
+def sample : Array(ListRow)
+  [
+    ListRow.new("To do", header: true),
+    ListRow.new("Write docs", "second line", key: "a"),
+    ListRow.new("Fix bug", key: "b"),
+    ListRow.new("Doing", header: true),
+    ListRow.new("Ship it", "soon", key: "c"),
+  ]
+end
+
+def build(rows : Array(ListRow)) : Tuple(ListView, Ui, Array(Int32))
+  picked = [] of Int32
+  lv = ListView.new(->(i : Int32) { picked << i; nil })
+  lv.rows = rows
+  ui = Ui.new(Box.new(Axis::Column, [lv] of Widget), RecordCanvas.new, MemoryClipboard.new)
+  ui.resize(300_f32, 400_f32)
+  ui.focus(lv)
+  ui.frame
+  {lv, ui, picked}
+end
+
+def key(ui : Ui, k : Key) : Nil
+  ui.dispatch KeyDown.new(k, Mods.new)
+  ui.frame
+end
+
+def main : Int32
+  # test_click: header 24, row with detail 40 -> y 24..64 is row 1
+  lv, ui, picked = build(sample)
+  ui.dispatch MouseDown.new(10_f32, 30_f32, MouseButton::Left)
+  ui.dispatch MouseUp.new(10_f32, 30_f32, MouseButton::Left)
+  expect_eq lv.selected, 1, "click selects"
+  expect_eq picked, [1], "on_select called"
+  ui.dispatch MouseDown.new(10_f32, 5_f32, MouseButton::Left)
+  expect_eq lv.selected, 1, "click on a header does nothing"
+  expect_eq picked.size, 1, "no callback for a header"
+
+  # test_keys: Down/Up skip headers
+  lv, ui, picked = build(sample)
+  key ui, Key::Down
+  expect_eq lv.selected, 1, "Down from nothing: first selectable"
+  key ui, Key::Down
+  expect_eq lv.selected, 2, "Down"
+  key ui, Key::Down
+  expect_eq lv.selected, 4, "Down skips the header"
+  key ui, Key::Down
+  expect_eq lv.selected, 4, "Down at the end stays"
+  key ui, Key::Up
+  key ui, Key::Up
+  expect_eq lv.selected, 1, "Up skips the header"
+  key ui, Key::Up
+  expect_eq lv.selected, 1, "Up at the top stays"
+
+  # test_page: viewport 400 holds all 5 rows (152): PageDown goes to the last
+  key ui, Key::PageDown
+  expect_eq lv.selected, 4, "PageDown clamps to the last row"
+  key ui, Key::PageUp
+  expect_eq lv.selected, 1, "PageUp clamps to the first selectable row"
+
+  # test_rows_keep_selection
+  lv, ui, picked = build(sample)
+  lv.selected = 2
+  lv.rows = [ListRow.new("New", header: true), ListRow.new("Other", key: "z"), ListRow.new("Fix bug", key: "b")]
+  expect_eq lv.selected, 2, "selection follows the key"
+  lv.rows = [ListRow.new("Other", key: "z")]
+  expect lv.selected.nil?, "selection cleared when the key is gone"
+
+  # test_empty_and_headers_only
+  lv, ui, picked = build([] of ListRow)
+  key ui, Key::Down
+  ui.dispatch MouseDown.new(10_f32, 5_f32, MouseButton::Left)
+  expect lv.selected.nil?, "empty: nothing selected"
+  lv, ui, picked = build([ListRow.new("A", header: true), ListRow.new("B", header: true)])
+  key ui, Key::Down
+  key ui, Key::Up
+  key ui, Key::PageDown
+  ui.dispatch MouseDown.new(10_f32, 5_f32, MouseButton::Left)
+  expect lv.selected.nil?, "headers only: nothing selected"
+  expect_eq picked.size, 0, "headers only: no callback"
+
+  # test_ellipsize
+  rc = RecordCanvas.new
+  expect_eq ellipsize(rc, "abcdefghij", 48_f32), "abcde…", "cut with an ellipsis"
+  expect_eq ellipsize(rc, "abc", 48_f32), "abc", "short text unchanged"
+
+  # test_draw_truncates_and_culls
+  many = [] of ListRow
+  100.times { |i| many << ListRow.new("Task #{i} with a very long title indeed", "detail #{i}", key: "k#{i}") }
+  lv = ListView.new
+  lv.rows = many
+  sc = Scroll.new(lv)
+  sc.sizing = Sizing.fixed(100_f32)
+  rc = RecordCanvas.new
+  ui = Ui.new(Box.new(Axis::Column, [sc] of Widget), rc, MemoryClipboard.new)
+  ui.resize(100_f32, 200_f32)
+  ui.frame
+  texts = rc.calls.select { |s| s.starts_with?("text") }
+  expect texts.size < 12, "only visible rows drawn (#{texts.size})"
+  expect texts.any? { |s| s.ends_with?("…") }, "long text truncated"
+
+  # test_reveal_in_scroll
+  ui.focus(lv)
+  10.times { key ui, Key::Down }
+  expect_eq lv.selected, 9, "selection moved"
+  r = lv.bounds.y + 9 * 40
+  expect sc.offset > 0_f32, "scroll followed the selection"
+  expect r >= sc.bounds.y && r + 40 <= sc.bounds.y + sc.bounds.h, "selected row inside the viewport"
+
+  puts "list_view_test OK"
+  0
+end
+
+exit main
