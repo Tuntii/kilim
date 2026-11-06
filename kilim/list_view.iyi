@@ -143,6 +143,15 @@ pub class ListView < Widget
     @bounds
   end
 
+  # Tab into the list shows the selected row; revealing the whole list would scroll it to its top.
+  pub def reveal : Nil
+    # Rows replaced since the last layout: the row tops are stale.
+    return if @dirty
+    if i = @selected
+      reveal(row_rect(i))
+    end
+  end
+
   pub def draw(c : Canvas) : Nil
     return if @rows.empty?
     measure_rows(c)

@@ -147,6 +147,28 @@ def main : Int32
   key ui, Key::PageUp
   expect_eq lv.selected, 0, "PageUp at the top stays"
 
+  # test_tab_in_keeps_scroll: Tab into a list scrolled to its selection leaves the offset alone
+  many = [] of ListRow
+  100.times { |i| many << ListRow.new("Task #{i}", "detail", key: "k#{i}") }
+  lv = ListView.new
+  lv.rows = many
+  sc = Scroll.new(lv)
+  sc.sizing = Sizing.fixed(100_f32)
+  other = ListView.new
+  ui = Ui.new(Box.new(Axis::Column, [other, sc] of Widget), RecordCanvas.new, MemoryClipboard.new)
+  ui.resize(300_f32, 200_f32)
+  ui.frame
+  ui.focus(lv)
+  30.times { key ui, Key::Down }
+  before = sc.offset
+  expect before > 0_f32, "scrolled down to row 29"
+  ui.focus(other)
+  key ui, Key::Tab
+  expect ui.focused == lv, "Tab moved into the list"
+  expect_eq sc.offset, before, "Tab into the list keeps its scroll"
+  r = lv.bounds.y + 29 * 40
+  expect r >= sc.bounds.y && r + 40 <= sc.bounds.y + sc.bounds.h, "the selected row stays visible"
+
   # test_selected_assign_checked
   lv, ui, picked = build(sample)
   lv.selected = 99
