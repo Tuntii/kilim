@@ -12,6 +12,7 @@ import kilim/button::{Button}
 import kilim/label::{Label}
 import kilim/textbox::{Textbox}
 import kilim/dropdown::{Dropdown}
+import kilim/list_view::*
 import kilim/testing::*
 
 class Log
@@ -276,6 +277,27 @@ def main : Int32
   modal_i = after.index { |c| c.ends_with?(",Only") }
   expect !root_i.nil? && !modal_i.nil?, "both the root and the modal drew"
   expect root_i.as(Int32) < si && si < modal_i.as(Int32), "order is root, scrim, modal"
+
+  # a MouseDown handler that opens the dialog (on_select calling confirm) leaves focus on OK
+  f = Fixture.new
+  u = f.ui
+  lg = f.log
+  lv = ListView.new(->(i : Int32) { confirm(u, "Delete", "Delete this task?", "Delete") { lg.oks += 1 }; nil })
+  lv.rows = [ListRow.new("Task", key: "t")]
+  f.box.add(lv)
+  f.ui.frame
+  lx = lv.bounds.x + 5
+  ly = lv.bounds.y + 5
+  f.ui.dispatch MouseMove.new(lx, ly)
+  f.ui.dispatch MouseDown.new(lx, ly, MouseButton::Left)
+  expect !f.ui.modal.nil?, "the click opened the dialog"
+  if m = f.ui.modal
+    expect f.ui.focused == button(m, "Delete"), "focus stays on the dialog's OK"
+  end
+  expect f.ui.captured.nil?, "the list behind the dialog does not take capture"
+  f.ui.dispatch MouseUp.new(lx, ly, MouseButton::Left)
+  key(f.ui, Key::Enter)
+  expect_eq f.log.oks, 1, "Enter confirms"
 
   # a long message is cut to fit
   f = Fixture.new

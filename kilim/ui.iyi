@@ -252,10 +252,15 @@ pub class Ui < Context
       elsif @modal && !(@hovered && (in_modal?(@hovered) || in_overlay?(@hovered)))
         # The dimmed window: nothing happens, focus stays.
       else
-        # The first widget that handles the event gets capture; MouseUp goes to it.
-        @captured = bubble(@hovered, e)
-        # Popup rows are not focus targets: the owner keeps focus.
-        focus(focus_target(@hovered)) unless in_overlay?(@hovered)
+        m = @modal
+        handler = bubble(@hovered, e)
+        # A handler that showed or closed a modal (on_select calling confirm) has placed focus already.
+        if @modal == m
+          # The first widget that handles the event gets capture; MouseUp goes to it.
+          @captured = handler
+          # Popup rows are not focus targets: the owner keeps focus.
+          focus(focus_target(@hovered)) unless in_overlay?(@hovered)
+        end
       end
     when MouseUp
       if c = @captured
