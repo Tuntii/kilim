@@ -1,10 +1,10 @@
 # End-to-end check of the native Windows backend (the SDL one is smoke.iyi, built
 # with -Dsdl): opens a window, posts real Win32 messages (click, Enter, typed text
-# with a surrogate pair), checks the embedded font, the IME switch and its window at
-# the caret, round-trips the clipboard (and puts back the text it held), recovers
-# from a (simulated) lost GPU device, exercises the live resize path (WM_SIZE
-# redraws from the window procedure) and a move to a 150 % display
-# (WM_DPICHANGED), saves smoke_win32.bmp at that scale and checks its pixels, and
+# with a surrogate pair, two lines into a text area), checks the embedded font, the
+# IME switch and its window at the caret, round-trips the clipboard (and puts back
+# the text it held), recovers from a (simulated) lost GPU device, exercises the live
+# resize path (WM_SIZE redraws from the window procedure) and a move to a 150 %
+# display (WM_DPICHANGED), saves smoke_win32.bmp at that scale and checks its pixels, and
 # hands values sent from other threads to the UI thread (Inbox), ending the run loop
 # with a WM_CLOSE sent that way. Prints `smoke ok` and exits 0, or the reason and 1.
 
@@ -19,6 +19,7 @@ import kilim/box::*
 import kilim/label::{Label}
 import kilim/button::{Button}
 import kilim/textbox::{Textbox}
+import kilim/text_area::{TextArea}
 import kilim/window::{Window}
 import kilim/canvas::{Color}
 import kilim/theme::*
@@ -71,8 +72,9 @@ def main : Int32
   n = Counter.new
   button = Button.new("OK", -> { n.n += 1; nil })
   input = Textbox.new
+  notes = TextArea.new
   title = Label.new("Merhaba şöğüt")
-  root = Box.new(Axis::Column, [title, button, input] of Widget, padding: PAD, spacing: 8_f32)
+  root = Box.new(Axis::Column, [title, button, input, notes] of Widget, padding: PAD, spacing: 8_f32)
   win = Window.new("smoke", 320, 200, root)
   win.step
   canvas = win.canvas
@@ -207,6 +209,16 @@ def main : Int32
   fail("label has #{ink} dark pixels, expected text") unless ink > 50
   puts "pixels: ok (label ink #{ink})"
 
+  # Text area: typed characters and a posted Enter (VK_RETURN) give two lines.
+  win.inject KeyDown.new(Key::Tab, Mods.new)
+  fail("Tab did not focus the text area") unless notes.focused
+  [0xC7_u64, 0x61_u64, 0x6C_u64, 0x131_u64, 0x15F_u64].each { |u| post(win, WM_CHAR, u, 1_i64) }
+  post(win, WM_KEYDOWN, VK_RETURN, 1_i64)
+  [0x15F_u64, 0xF6_u64, 0x11F_u64, 0xFC_u64, 0x74_u64].each { |u| post(win, WM_CHAR, u, 1_i64) }
+  win.step
+  fail("text area holds #{notes.text.inspect}, expected \"Çalış\nşöğüt\"") unless notes.text == "Çalış\nşöğüt"
+  puts "text area: ok"
+
   # Timers: a repeating timer ticks while the loop steps, and stops once cancelled.
   ticks = 0
   id = win.every(10) { ticks += 1; nil }
@@ -241,9 +253,9 @@ def main : Int32
   # handler sends WM_CLOSE. It must run soon after the send (60 ms): any later wake
   # (a stray message came at ~280 ms here) would deliver it too. The 1 s timer only
   # keeps a broken wake from hanging the test.
-  # Focus off the textbox, or the caret blink would wake the loop too.
+  # Focus off the text area, or the caret blink would wake the loop too.
   win.inject KeyDown.new(Key::Tab, Mods.new)
-  fail("Tab did not move focus off the textbox") if win.ui.wants_text_input?
+  fail("Tab did not move focus off the text area") if win.ui.wants_text_input?
   ticked = false
   took = -1_i64
   win.after(30) { ticked = true; nil }

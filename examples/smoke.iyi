@@ -1,7 +1,7 @@
 # End-to-end check of the SDL backend: opens a window with a Label and a Button,
-# injects Tab + Space, exercises the live resize path (event watch),
-# saves smoke.bmp, hands values sent from other threads to the UI thread (Inbox) and
-# ends the run loop with a QUIT sent that way. On success it prints
+# injects Tab + Space, types two lines into a text area, exercises the live resize
+# path (event watch), saves smoke.bmp, hands values sent from other threads to the
+# UI thread (Inbox) and ends the run loop with a QUIT sent that way. On success it prints
 # `smoke ok` and exits 0; otherwise it prints the reason and exits 1.
 # On Windows build it with -Dsdl (the native backend has examples/smoke_win32.iyi).
 
@@ -14,6 +14,7 @@ import kilim/widget::{Widget}
 import kilim/box::*
 import kilim/label::{Label}
 import kilim/button::{Button}
+import kilim/text_area::{TextArea}
 import kilim/window::{Window}
 
 PAD = 12_f32
@@ -63,7 +64,8 @@ def main : Int32
   n = Counter.new
   button = Button.new("OK", -> { n.n += 1; nil })
   title = Label.new("Merhaba şöğüt")
-  root = Box.new(Axis::Column, [title, button] of Widget, padding: PAD, spacing: 8_f32)
+  notes = TextArea.new
+  root = Box.new(Axis::Column, [title, button, notes] of Widget, padding: PAD, spacing: 8_f32)
   win = Window.new("smoke", 320, 200, root)
   win.step
 
@@ -81,6 +83,19 @@ def main : Int32
   push_key(LibSDL3::KEY_RETURN)
   win.step
   fail("counter after SDL click + Enter is #{n.n}, expected 3") unless n.n == 3
+
+  # Text area: typed text and Enter give two lines; Tab then wraps back to the button,
+  # so the caret blink does not keep waking the loop later.
+  win.inject KeyDown.new(Key::Tab, Mods.new)
+  fail("Tab did not focus the text area") unless notes.focused
+  win.inject TextInput.new("Çalış")
+  win.inject KeyDown.new(Key::Enter, Mods.new)
+  win.inject TextInput.new("şöğüt")
+  win.step
+  fail("text area holds #{notes.text.inspect}, expected \"Çalış\nşöğüt\"") unless notes.text == "Çalış\nşöğüt"
+  win.inject KeyDown.new(Key::Tab, Mods.new)
+  fail("Tab did not move focus back to the button") unless button.focused
+  puts "text area: ok"
 
   # Live resize path: the WINDOW_RESIZED produced by SetWindowSize must trigger
   # layout + drawing in the watch even though the loop has not run at all. Whatever

@@ -3,6 +3,7 @@
 module kilim/text_edit
 
 import std/indexable
+import kilim/canvas::{Canvas}
 
 pub class TextEdit
   getter cursor : Int32 = 0
@@ -34,10 +35,11 @@ pub class TextEdit
 
   pub def insert(s : String) : Nil
     delete_selection
-    s.each_char do |ch|
-      @chars.insert(@cursor, ch)
-      @cursor += 1
-    end
+    # One splice: inserting character by character is O(n²) for a large paste.
+    add = [] of Char
+    s.each_char { |ch| add << ch }
+    @chars[@cursor, 0] = add
+    @cursor += add.size
   end
 
   pub def backspace : Nil
@@ -95,7 +97,7 @@ pub class TextEdit
     s = selection
     @anchor = nil
     return false unless s
-    (s[1] - s[0]).times { @chars.delete_at(s[0]) }
+    @chars[s[0], s[1] - s[0]] = [] of Char
     @cursor = s[0]
     true
   end
@@ -125,7 +127,27 @@ pub class TextEdit
     move_to(@chars.size, grow)
   end
 
-  def join(from : Int32, upto : Int32) : String
+  # The index in [from, upto] whose x, measured from the character at from, is nearest x
+  # (binary search over prefix widths).
+  pub def index_near(c : Canvas, from : Int32, upto : Int32, x : Float32) : Int32
+    lo = from
+    hi = upto
+    while lo < hi
+      mid = (lo + hi) // 2
+      if c.measure(join(from, mid)).w < x
+        lo = mid + 1
+      else
+        hi = mid
+      end
+    end
+    if lo > from && x - c.measure(join(from, lo - 1)).w < c.measure(join(from, lo)).w - x
+      lo -= 1
+    end
+    lo
+  end
+
+  # Text of characters [from, upto).
+  pub def join(from : Int32, upto : Int32) : String
     String.build do |b|
       i = from
       while i < upto

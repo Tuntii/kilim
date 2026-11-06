@@ -67,6 +67,19 @@ def main : Int32
   expect_eq e.selected_text, "a", "Shift+Home"
   e.end_(true)
   expect_eq e.selected_text, "d", "anchor kept, Shift+End"
+
+  # Large edits: ~30,000 characters deleted and pasted in one operation each.
+  big = "şöğüt ılık " * 2728
+  e.set(big)
+  e.select_all
+  e.delete
+  expect_eq e.size, 0, "select-all + Delete empties a large text"
+  e.set("son")
+  e.home
+  e.insert(big)
+  expect_eq e.size, big.size + 3, "a large paste at the front"
+  expect_eq e.cursor, big.size, "the caret ends after the paste"
+  expect_eq e.text, big + "son", "the pasted text comes before the old text"
   puts "text_edit ok"
   0
 end

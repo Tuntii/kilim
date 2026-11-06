@@ -99,21 +99,7 @@ pub class Textbox < Widget
   pub def index_at(x : Float32) : Int32
     c = @canvas
     return 0 unless c
-    px = x - bounds.x - PADDING + @scroll_x
-    lo = 0
-    hi = @edit.size
-    while lo < hi
-      mid = (lo + hi) // 2
-      if c.measure(@edit.prefix(mid)).w < px
-        lo = mid + 1
-      else
-        hi = mid
-      end
-    end
-    if lo > 0 && px - c.measure(@edit.prefix(lo - 1)).w < c.measure(@edit.prefix(lo)).w - px
-      lo -= 1
-    end
-    lo
+    @edit.index_near(c, 0, @edit.size, x - bounds.x - PADDING + @scroll_x)
   end
 
   pub def handle(e : Event, ui : Context) : Bool
