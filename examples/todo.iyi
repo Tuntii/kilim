@@ -31,6 +31,8 @@ class App
   # For the self-test: a checkbox and a Delete button per row (deleted ones stay).
   getter checks = [] of Checkbox
   getter dels = [] of Button
+  # Set once the window exists; Delete asks through it.
+  property ui : Kilim::Widget::Context? = nil
 
   def initialize
     @list = Kilim.column(spacing: 4)
@@ -46,13 +48,21 @@ class App
     return if text.empty?
     slot = Slot.new
     check = Kilim.checkbox(text, sizing: Kilim.fill)
-    del = Kilim.button("Delete", -> { remove(slot) })
+    del = Kilim.button("Delete", -> { confirm_remove(slot) })
     row = Kilim.row([check, del] of Widget, spacing: 8)
     slot.row = row
     @checks << check
     @dels << del
     @list.add(row)
     @input.text = ""
+  end
+
+  def confirm_remove(slot : Slot) : Nil
+    if u = @ui
+      Kilim.confirm(u, "Delete task", "Delete this task?", "Delete") { remove(slot) }
+    else
+      remove(slot)
+    end
   end
 
   def remove(slot : Slot) : Nil
@@ -86,6 +96,13 @@ def wheel(win : Window, w : Widget, dy : Float32) : Nil
   win.inject Wheel.new(w.bounds.x + w.bounds.w / 2, w.bounds.y + w.bounds.h / 2, dy)
 end
 
+def modal?(app : App) : Bool
+  if u = app.ui
+    return !u.modal.nil?
+  end
+  false
+end
+
 def selftest(win : Window, app : App, bmp : String) : Nil
   win.step
   win.inject KeyDown.new(Key::Tab, Mods.new)
@@ -111,8 +128,16 @@ def selftest(win : Window, app : App, bmp : String) : Nil
   wheel(win, app.scroll, 100_f32)
   fail("could not scroll back to top (offset #{app.scroll.offset})") unless app.scroll.offset == 0
 
+  # Delete asks first: Escape keeps the row, Enter (OK has the focus) deletes it.
   click(win, app.dels[0])
-  fail("#{app.list.children.size} rows after Delete, expected 30") unless app.list.children.size == 30
+  fail("Delete did not open the confirm dialog") unless modal?(app)
+  win.inject KeyDown.new(Key::Escape, Mods.new)
+  fail("Escape did not close the dialog") if modal?(app)
+  fail("#{app.list.children.size} rows after cancelled Delete, expected 31") unless app.list.children.size == 31
+  click(win, app.dels[0])
+  win.step
+  win.inject KeyDown.new(Key::Enter, Mods.new)
+  fail("#{app.list.children.size} rows after confirmed Delete, expected 30") unless app.list.children.size == 30
 
   # Drag-select the start of the typed text.
   click(win, app.input)
@@ -150,6 +175,7 @@ end
 def main : Int32
   app = App.new
   win = Kilim.window("kilim todo", 480, 420, app.root)
+  app.ui = win.ui
   if bmp = ENV["KILIM_SELFTEST"]?
     selftest(win, app, bmp)
   else

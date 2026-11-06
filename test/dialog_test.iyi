@@ -1,0 +1,290 @@
+# Ui modal layer and the confirm dialog.
+
+module test/dialog_test
+
+import kilim/dialog::{confirm}
+import kilim/geom::{Rect, Size}
+import kilim/event::*
+import kilim/widget::*
+import kilim/box::*
+import kilim/ui::{Ui}
+import kilim/button::{Button}
+import kilim/label::{Label}
+import kilim/textbox::{Textbox}
+import kilim/dropdown::{Dropdown}
+import kilim/testing::*
+
+class Log
+  property oks : Int32 = 0
+  property deletes : Int32 = 0
+end
+
+class Fixture
+  getter ui : Ui
+  getter box : Box
+  getter text : Textbox
+  getter behind : Button
+  getter log : Log
+
+  def initialize
+    @log = Log.new
+    log = @log
+    @text = Textbox.new("x")
+    @behind = Button.new("Behind", -> { log.deletes += 1; nil })
+    @box = Box.new(Axis::Column, [@text, @behind] of Widget)
+    @ui = Ui.new(@box, RecordCanvas.new, MemoryClipboard.new)
+    @ui.resize(400_f32, 300_f32)
+    @ui.frame
+  end
+
+  def confirm : Box
+    log = @log
+    confirm(@ui, "Delete", "Delete this task?", "Delete") { log.oks += 1 }
+    @ui.frame
+    @ui.modal.as(Box)
+  end
+end
+
+def press(ui : Ui, x : Float32, y : Float32) : Nil
+  ui.dispatch MouseMove.new(x, y)
+  ui.dispatch MouseDown.new(x, y, MouseButton::Left)
+  ui.dispatch MouseUp.new(x, y, MouseButton::Left)
+end
+
+def click(ui : Ui, w : Widget) : Nil
+  press(ui, w.bounds.x + w.bounds.w / 2, w.bounds.y + w.bounds.h / 2)
+end
+
+def key(ui : Ui, k : Key, mods : Mods = Mods.new) : Nil
+  ui.dispatch KeyDown.new(k, mods)
+end
+
+# Buttons of the dialog, found by their text.
+def button(w : Widget, text : String) : Button?
+  if w.is_a?(Button) && w.text == text
+    return w
+  end
+  w.children.each do |k|
+    if b = button(k, text)
+      return b
+    end
+  end
+  nil
+end
+
+def inside?(w : Widget?, root : Widget?) : Bool
+  if w && root
+    return w.attached_to?(root)
+  end
+  false
+end
+
+def main : Int32
+  # Enter confirms: on_ok once, modal closed
+  f = Fixture.new
+  f.confirm
+  expect !f.ui.modal.nil?, "confirm shows a modal"
+  key(f.ui, Key::Enter)
+  expect_eq f.log.oks, 1, "Enter calls on_ok once"
+  expect f.ui.modal.nil?, "Enter closes"
+  key(f.ui, Key::Enter)
+  expect_eq f.log.oks, 1, "no second call"
+
+  # Escape cancels
+  f = Fixture.new
+  f.confirm
+  key(f.ui, Key::Escape)
+  expect_eq f.log.oks, 0, "Escape does not call on_ok"
+  expect f.ui.modal.nil?, "Escape closes"
+
+  # Enter on a focused Cancel is Cancel
+  f = Fixture.new
+  d = f.confirm
+  if c = button(d, "Cancel")
+    f.ui.focus(c)
+  end
+  key(f.ui, Key::Enter)
+  expect_eq f.log.oks, 0, "Enter on Cancel cancels"
+  expect f.ui.modal.nil?, "Cancel closes"
+
+  # OK is focused on open
+  f = Fixture.new
+  d = f.confirm
+  expect f.ui.focused == button(d, "Delete"), "the OK button has focus"
+
+  # clicking OK and Cancel
+  f = Fixture.new
+  d = f.confirm
+  if b = button(d, "Delete")
+    click(f.ui, b)
+  end
+  expect_eq f.log.oks, 1, "click OK"
+  expect f.ui.modal.nil?, "click OK closes"
+  d = f.confirm
+  if b = button(d, "Cancel")
+    click(f.ui, b)
+  end
+  expect_eq f.log.oks, 1, "click Cancel does not call on_ok"
+  expect f.ui.modal.nil?, "click Cancel closes"
+
+  # centred, dimmed
+  f = Fixture.new
+  d = f.confirm
+  expect_eq d.bounds.x + d.bounds.w / 2, 200_f32, "centred horizontally"
+  expect_eq d.bounds.y + d.bounds.h / 2, 150_f32, "centred vertically"
+
+  # a click on a button behind does nothing, and keeps focus
+  f = Fixture.new
+  f.ui.focus(f.text)
+  f.confirm
+  focus_before = f.ui.focused
+  click(f.ui, f.behind)
+  expect_eq f.log.deletes, 0, "button behind the modal is dead"
+  expect !f.ui.modal.nil?, "click outside does not close the modal"
+  expect f.ui.focused == focus_before, "click outside keeps focus"
+  key(f.ui, Key::Escape)
+
+  # window shortcuts do not fire while the modal is up
+  f = Fixture.new
+  fired = 0
+  f.ui.shortcut(Key::Delete, primary: false) { fired += 1 }
+  key(f.ui, Key::Delete)
+  expect_eq fired, 1, "the shortcut works without a modal"
+  f.confirm
+  key(f.ui, Key::Delete)
+  expect_eq fired, 1, "the shortcut is off while the modal is up"
+  key(f.ui, Key::Escape)
+  key(f.ui, Key::Delete)
+  expect_eq fired, 2, "the shortcut is back after close"
+
+  # Tab never leaves the dialog
+  f = Fixture.new
+  d = f.confirm
+  6.times do
+    key(f.ui, Key::Tab)
+    expect inside?(f.ui.focused, d), "Tab stays in the dialog"
+  end
+  key(f.ui, Key::Tab, Mods.new(true))
+  expect inside?(f.ui.focused, d), "Shift+Tab stays in the dialog"
+
+  # focus returns to the textbox that had it
+  f = Fixture.new
+  f.ui.focus(f.text)
+  f.confirm
+  expect f.ui.focused != f.text, "focus moved into the dialog"
+  key(f.ui, Key::Escape)
+  expect f.ui.focused == f.text, "focus is back on the textbox"
+
+  # ... but not to a widget that left the tree
+  f = Fixture.new
+  f.ui.focus(f.text)
+  f.confirm
+  f.box.remove(f.text)
+  key(f.ui, Key::Escape)
+  expect f.ui.focused.nil?, "no focus on a removed widget"
+
+  # the modal's widget attached somewhere else closes the modal cleanly
+  f = Fixture.new
+  f.ui.focus(f.text)
+  d = f.confirm
+  f.box.add(d)
+  f.ui.dispatch MouseMove.new(1_f32, 1_f32)
+  expect f.ui.modal.nil?, "modal gone after being attached to a tree"
+  expect f.ui.focused == f.text, "focus restored"
+  expect f.ui.hovered.nil? || inside?(f.ui.hovered, f.box), "hover is in a live tree"
+
+  # a widget removed from inside the dialog drops its focus
+  f = Fixture.new
+  d = f.confirm
+  ok = button(d, "Delete").as(Button)
+  ok.parent.as(Box).remove(ok)
+  f.ui.dispatch MouseMove.new(1_f32, 1_f32)
+  expect f.ui.focused.nil?, "focus on a removed dialog button is dropped"
+
+  # a dropdown inside the modal keeps its popup, drawn above the modal
+  f = Fixture.new
+  dd = Dropdown.new(["a", "b", "c"])
+  panel = Box.new(Axis::Column, [dd] of Widget, 8_f32)
+  f.ui.show_modal(panel)
+  f.ui.frame
+  click(f.ui, dd)
+  expect !f.ui.overlay.nil?, "dropdown in the modal opens"
+  f.ui.dispatch MouseMove.new(1_f32, 1_f32)
+  expect !f.ui.overlay.nil?, "its popup survives sanitize"
+  f.ui.frame
+  if o = f.ui.overlay
+    click(f.ui, o.children[1])
+  end
+  expect_eq dd.selected, 1, "an option in the popup is pickable"
+  expect !f.ui.modal.nil?, "picking leaves the modal"
+
+  # showing a modal hides a popup of the root tree
+  f = Fixture.new
+  dd = Dropdown.new(["a", "b"])
+  f.box.add(dd)
+  f.ui.frame
+  click(f.ui, dd)
+  expect !f.ui.overlay.nil?, "root dropdown open"
+  f.confirm
+  expect f.ui.overlay.nil?, "the modal hides the root's popup"
+
+  # a modal without focusable children takes focus away from the root
+  f = Fixture.new
+  submitted = 0
+  tb = Textbox.new("t", "", nil, ->(t : String) { submitted += 1; nil })
+  f.box.add(tb)
+  f.ui.frame
+  f.ui.focus(tb)
+  f.ui.show_modal(Box.new(Axis::Column, [Label.new("Hi")] of Widget))
+  f.ui.frame
+  expect f.ui.focused.nil?, "a bare modal clears focus"
+  f.ui.dispatch TextInput.new("abc")
+  key(f.ui, Key::Enter)
+  expect_eq tb.text, "", "typing does not reach the root textbox"
+  expect_eq submitted, 0, "Enter does not submit the root textbox"
+  f.ui.close_modal
+  expect f.ui.focused == tb, "focus back on the textbox"
+
+  # a drag in progress when the modal opens does not finish on the root widget
+  f = Fixture.new
+  bx = f.behind.bounds.x + 2_f32
+  by = f.behind.bounds.y + 2_f32
+  f.ui.dispatch MouseMove.new(bx, by)
+  f.ui.dispatch MouseDown.new(bx, by, MouseButton::Left)
+  f.ui.show_modal(Box.new(Axis::Column, [Label.new("Hi")] of Widget))
+  f.ui.frame
+  f.ui.dispatch MouseUp.new(bx, by, MouseButton::Left)
+  expect_eq f.log.deletes, 0, "MouseUp after show_modal does not click the root button"
+  expect !f.behind.pressed, "the root button is no longer pressed"
+  expect f.ui.hovered.nil?, "nothing under a modal stays hovered"
+
+  # draw order: root, scrim, modal
+  f = Fixture.new
+  cv = RecordCanvas.new
+  ui = Ui.new(f.box, cv, MemoryClipboard.new)
+  ui.resize(400_f32, 300_f32)
+  ui.frame
+  n = cv.calls.size
+  ui.show_modal(Box.new(Axis::Column, [Button.new("Only")] of Widget))
+  ui.frame
+  scrim = cv.calls[n..].rindex("fill 0.0,0.0,400.0,300.0")
+  expect_eq cv.calls[n..].count { |c| c == "fill 0.0,0.0,400.0,300.0" }, 2, "background and scrim cover the window"
+  expect !scrim.nil?, "scrim drawn"
+  after = cv.calls[n..]
+  si = scrim.as(Int32)
+  root_i = after.index { |c| c.ends_with?(",Behind") }
+  modal_i = after.index { |c| c.ends_with?(",Only") }
+  expect !root_i.nil? && !modal_i.nil?, "both the root and the modal drew"
+  expect root_i.as(Int32) < si && si < modal_i.as(Int32), "order is root, scrim, modal"
+
+  # a long message is cut to fit
+  f = Fixture.new
+  confirm(f.ui, "T", "x" * 100, "OK") { }
+  f.ui.frame
+  expect (f.ui.modal || f.box).bounds.w <= 360_f32, "the dialog is at most 360 wide"
+
+  puts "dialog_test ok"
+  0
+end
+
+exit main

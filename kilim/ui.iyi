@@ -26,6 +26,7 @@ pub class Ui < Context
   getter focused : Widget? = nil
   getter clipboard : Clipboard
   getter overlay : Widget? = nil
+  getter modal : Widget? = nil
 
   def initialize(@root : Widget, @canvas : Canvas, @clipboard : Clipboard)
     @shortcuts = [] of Shortcut
@@ -53,10 +54,48 @@ pub class Ui < Context
 
   pub def needs_frame? : Bool
     return true if @root.needs_frame
+    if m = @modal
+      return true if m.needs_frame
+    end
     if o = @overlay
       return o.needs_frame
     end
     false
+  end
+
+  # Replaces a modal already shown. Any popup goes: it belonged to the tree underneath.
+  pub def show_modal(w : Widget) : Nil
+    close_modal if @modal
+    hide_overlay
+    @modal_prev = @focused
+    @modal = w
+    # Nothing behind the modal keeps input: a drag in progress ends, hover and focus move into the modal.
+    if c = @captured
+      c.pressed = false
+      @captured = nil
+    end
+    set_hover(nil)
+    order = [] of Widget
+    collect(w, order)
+    focus(order.empty? ? nil : order.first)
+    @root.needs_frame = true
+  end
+
+  pub def close_modal : Nil
+    return unless m = @modal
+    @modal = nil
+    m.needs_frame = false
+    if o = @overlay
+      if w = o.owner
+        hide_overlay if w.attached_to?(m)
+      end
+    end
+    prev = @modal_prev
+    @modal_prev = nil
+    # Back to where the user was, unless that widget left the tree meanwhile.
+    focus(prev && prev.attached_to?(@root) ? prev : nil)
+    @root.needs_frame = true
+    sanitize
   end
 
   pub def show_overlay(w : Widget, below : Rect) : Nil
@@ -75,14 +114,25 @@ pub class Ui < Context
     end
   end
 
-  # The overlay is on top, so it is asked first.
+  # The overlay is on top, then the modal; with a modal up the root is out of reach.
   def hit_at(x : Float32, y : Float32) : Widget?
     if o = @overlay
       if h = o.hit(x, y)
         return h
       end
     end
+    if m = @modal
+      return m.hit(x, y)
+    end
     @root.hit(x, y)
+  end
+
+  def layout_modal : Nil
+    return unless m = @modal
+    s = m.cached_preferred(@canvas)
+    w = s.w < @w ? s.w : @w
+    h = s.h < @h ? s.h : @h
+    m.layout(Rect.new((@w - w) / 2, (@h - h) / 2, w, h), @canvas)
   end
 
   def layout_overlay : Nil
@@ -103,17 +153,25 @@ pub class Ui < Context
     return false unless needs_frame?
     @root.needs_frame = false
     @root.layout(Rect.new(0_f32, 0_f32, @w, @h), @canvas)
+    layout_modal
     layout_overlay
     # Content moved under a resting pointer; draw already shows the right hover.
     if @mouse
       set_hover(hit_at(@mx, @my))
       @root.needs_frame = false
     end
+    if m = @modal
+      m.needs_frame = false
+    end
     if o = @overlay
       o.needs_frame = false
     end
     @canvas.fill_rect(Rect.new(0_f32, 0_f32, @w, @h), BG)
     @root.draw(@canvas)
+    if m = @modal
+      @canvas.fill_rect(Rect.new(0_f32, 0_f32, @w, @h), SCRIM)
+      m.draw(@canvas)
+    end
     if o = @overlay
       o.draw(@canvas)
     end
@@ -165,6 +223,7 @@ pub class Ui < Context
   end
 
   def run_shortcut(e : KeyDown) : Bool
+    return false if @modal
     return false if !e.mods.primary && wants_text_input?
     s = @shortcuts.find { |c| c.key == e.key && c.primary == e.mods.primary && c.shift == e.mods.shift }
     return false unless s
@@ -188,6 +247,8 @@ pub class Ui < Context
       if @overlay && !(@hovered && in_overlay?(@hovered))
         # Outside the popup: it closes and the click goes no further.
         hide_overlay
+      elsif @modal && !(@hovered && (in_modal?(@hovered) || in_overlay?(@hovered)))
+        # The dimmed window: nothing happens, focus stays.
       else
         # The first widget that handles the event gets capture; MouseUp goes to it.
         @captured = bubble(@hovered, e)
@@ -205,7 +266,7 @@ pub class Ui < Context
         # Scrolling would leave the popup behind its owner: close it, and swallow the wheel.
         hide_overlay
       else
-        bubble(@root.hit(e.x, e.y), e)
+        bubble(@modal ? hit_at(e.x, e.y) : @root.hit(e.x, e.y), e)
       end
     when KeyDown, TextInput
       if e.is_a?(KeyDown) && e.key.escape? && @overlay
@@ -213,8 +274,17 @@ pub class Ui < Context
       elsif e.is_a?(KeyDown) && run_shortcut(e)
       elsif e.is_a?(KeyDown) && e.key.tab?
         move_focus(e.mods.shift ? -1 : 1)
-      elsif f = @focused
-        f.handle(e, self)
+      else
+        handled = false
+        if f = @focused
+          handled = f.handle(e, self)
+        end
+        # Escape / Enter that the focused widget left alone belong to the modal.
+        if !handled && e.is_a?(KeyDown)
+          if m = @modal
+            m.handle(e, self)
+          end
+        end
       end
     when Resize
       resize(e.w, e.h)
@@ -230,9 +300,17 @@ pub class Ui < Context
     false
   end
 
-  # In the root tree or in the overlay's.
+  def in_modal?(w : Widget?) : Bool
+    return false unless w
+    if m = @modal
+      return w.attached_to?(m)
+    end
+    false
+  end
+
+  # In the root tree, the modal's or the overlay's.
   def live?(w : Widget) : Bool
-    w.attached_to?(@root) || in_overlay?(w)
+    w.attached_to?(@root) || in_modal?(w) || in_overlay?(w)
   end
 
   # The target or its nearest focusable ancestor.
@@ -248,7 +326,7 @@ pub class Ui < Context
   # DFS order is recomputed every time; wraps at the ends.
   def move_focus(dir : Int32) : Nil
     order = [] of Widget
-    collect(@root, order)
+    collect(@modal || @root, order)
     return if order.empty?
     i = nil
     if f = @focused
@@ -316,19 +394,24 @@ pub class Ui < Context
       end
     end
     if f = @focused
-      unless f.attached_to?(@root)
+      unless f.attached_to?(@root) || in_modal?(f)
         f.focused = false
         @focused = nil
       end
     end
     if o = @overlay
       if w = o.owner
-        hide_overlay unless w.attached_to?(@root)
+        hide_overlay unless w.attached_to?(@root) || in_modal?(w)
       end
+    end
+    # Added to a tree from outside: it is no longer a root of its own.
+    if m = @modal
+      close_modal if m.parent
     end
   end
 
   @root : Widget
+  @modal_prev : Widget? = nil
   @anchor : Rect = Rect.new(0_f32, 0_f32, 0_f32, 0_f32)
   @mx : Float32
   @my : Float32

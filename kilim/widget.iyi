@@ -175,4 +175,11 @@ pub abstract class Context
   # A click outside it, Escape, a Wheel or a resize hides it; the click or wheel does not go further.
   pub abstract def show_overlay(w : Widget, below : Rect) : Nil
   pub abstract def hide_overlay : Nil
+  # The modal currently shown (one at a time); it is centred over a dimmed window and owns input and Tab.
+  # Escape and Enter that its focused widget does not handle go to the modal's own `handle`.
+  # Window shortcuts do not fire. Focus goes back to the previously focused widget on close.
+  # An overlay shown from inside the modal draws above it.
+  pub abstract def modal : Widget?
+  pub abstract def show_modal(w : Widget) : Nil
+  pub abstract def close_modal : Nil
 end

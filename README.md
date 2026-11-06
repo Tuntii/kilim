@@ -73,6 +73,7 @@ list with a textbox, buttons, checkboxes, scrolling and Turkish text.
 | `textbox(placeholder, on_change:, on_submit:, sizing:)` | A single-line text field with copy and paste. |
 | `text_area(placeholder, on_change:, sizing:)` | A multi-line text field that wraps words and scrolls on its own. Enter starts a new line; Up, Down, Home and End move by visual line. |
 | `dropdown(options, selected:, on_change:, sizing:)` | Shows the chosen option; a click, Space or Enter opens the list as an overlay. Up and Down change the choice, Enter or a click picks, Escape or a click outside closes (that click does not reach the widget under it). |
+| `confirm(ui, title, message, ok_text, &on_ok)` | A modal confirmation: centred over a dimmed window, Cancel / `ok_text`. OK has the focus, so Enter confirms (Enter on a focused Cancel cancels); Escape cancels. Input behind it is ignored, Tab stays inside, window shortcuts do not fire, and focus goes back to the previous widget on close. The block runs after the dialog closes. Underneath: `Context#show_modal(widget)` / `#close_modal`; a dropdown inside a modal opens above it. |
 | `scroll(child, sizing:)` | A vertically scrolling viewport with a scrollbar. |
 | `list_view(on_select:, sizing:)` | A selectable list; set `rows =` to `ListRow`s (title, optional detail line, header rows). Up, Down, PageUp and PageDown move the selection; long text ends in an ellipsis. |
 
