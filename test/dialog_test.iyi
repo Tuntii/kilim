@@ -2,7 +2,7 @@
 
 module test/dialog_test
 
-import kilim
+import kilim/dialog::{confirm}
 import kilim/geom::{Rect, Size}
 import kilim/event::*
 import kilim/widget::*
@@ -39,7 +39,7 @@ class Fixture
 
   def confirm : Box
     log = @log
-    Kilim.confirm(@ui, "Delete", "Delete this task?", "Delete") { log.oks += 1 }
+    confirm(@ui, "Delete", "Delete this task?", "Delete") { log.oks += 1 }
     @ui.frame
     @ui.modal.as(Box)
   end
@@ -279,7 +279,7 @@ def main : Int32
 
   # a long message is cut to fit
   f = Fixture.new
-  Kilim.confirm(f.ui, "T", "x" * 100, "OK") { }
+  confirm(f.ui, "T", "x" * 100, "OK") { }
   f.ui.frame
   expect (f.ui.modal || f.box).bounds.w <= 360_f32, "the dialog is at most 360 wide"
 

@@ -83,13 +83,7 @@ end
 # Asks before doing something: Cancel / ok_text over a dimmed window. Enter or the OK button runs the block,
 # Escape or Cancel just closes. OK has the focus when it opens, so Enter alone confirms.
 pub def confirm(ui : Kilim::Widget::Context, title : String, message : String, ok_text : String = "OK", &on_ok : -> Nil) : Nil
-  d = Kilim::Dialog::Dialog.new(title, message, ok_text, ->(ok : Bool) {
-    ui.close_modal
-    on_ok.call if ok
-    nil
-  })
-  ui.show_modal(d)
-  ui.focus(d.ok)
+  Kilim::Dialog.confirm(ui, title, message, ok_text, &on_ok)
 end
 
 pub def fit : Kilim::Widget::Sizing

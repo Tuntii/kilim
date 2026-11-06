@@ -72,3 +72,15 @@ pub class Dialog < Box
 
   @done : Bool -> Nil
 end
+
+# Shows a Cancel / ok_text dialog over a dimmed window; the block runs after the dialog closes on OK.
+# OK has the focus, so Enter alone confirms.
+pub def confirm(ui : Context, title : String, message : String, ok_text : String = "OK", &on_ok : -> Nil) : Nil
+  d = Dialog.new(title, message, ok_text, ->(ok : Bool) {
+    ui.close_modal
+    on_ok.call if ok
+    nil
+  })
+  ui.show_modal(d)
+  ui.focus(d.ok)
+end
