@@ -20,6 +20,12 @@ def key(ui : Ui, k : Key, shift : Bool = false, primary : Bool = false) : Nil
   ui.dispatch KeyDown.new(k, Mods.new(shift, primary))
 end
 
+# Caret to the end of the text (text= puts it at the start).
+def to_end(ui : Ui) : Nil
+  key(ui, Key::A, primary: true)
+  key(ui, Key::Right)
+end
+
 def main : Int32
   lg = Log.new
   ta = TextArea.new("notes", "", ->(s : String) { lg.changes += 1; nil })
@@ -48,6 +54,7 @@ def main : Int32
   # Up/Down keep the caret's x across lines of different lengths.
   ta.text = "abcdef\nab\nabcdef"
   expect_eq lg.changes, 3, "text= does not call on_change"
+  to_end(ui)
   key(ui, Key::Up)
   key(ui, Key::Up)
   ui.dispatch TextInput.new("X")
@@ -60,6 +67,7 @@ def main : Int32
 
   # Home/End go to the ends of the visual line, not of the paragraph.
   ta.text = "aaaa bbbb cccc"
+  to_end(ui)
   key(ui, Key::Home)
   ui.dispatch TextInput.new("X")
   expect_eq ta.text, "aaaa bbbb Xcccc", "Home goes to the start of the wrapped line"
@@ -136,6 +144,7 @@ def main : Int32
 
   # Spaces typed at the end of a full line hang past the edge; the caret stays at the edge.
   ta.text = "abcdefghij"
+  to_end(ui)
   ui.dispatch TextInput.new("  ")
   if r = ta.caret_rect
     expect_eq r.x, x0 + 80, "caret x is clamped to the text width"
@@ -147,10 +156,12 @@ def main : Int32
 
   # Never lose text: joining paragraphs, replacing a selection across a newline and a soft wrap.
   ta.text = "ab\ncd"
+  to_end(ui)
   key(ui, Key::Home)
   key(ui, Key::Backspace)
   expect_eq ta.text, "abcd", "Backspace at a paragraph's start joins it to the one above"
   ta.text = "ab\ncd"
+  to_end(ui)
   key(ui, Key::Up)
   key(ui, Key::Delete)
   expect_eq ta.text, "abcd", "Delete at a paragraph's end joins the next one"
@@ -180,6 +191,21 @@ def main : Int32
   key(ui, Key::X, primary: true)
   mem.fail = false
   expect_eq ta.text, "keep\nme", "a failed clipboard write cuts nothing"
+
+  # text= starts at the top: caret at 0, nothing selected, no scroll.
+  long = "1\n2\n3\n4\n5\n6\n7\n8"
+  ta.text = long
+  ui.frame
+  key(ui, Key::A, primary: true)
+  ta.text = long
+  expect_eq ta.offset, 0_f32, "text= scrolls to the top"
+  if r = ta.caret_rect
+    expect_eq r.y, y0, "text= puts the caret on the first line"
+    expect_eq r.x, x0, "text= puts the caret at 0"
+  end
+  mem.set("none")
+  key(ui, Key::C, primary: true)
+  expect_eq mem.get, "none", "text= leaves no selection"
 
   puts "text area ok"
   0

@@ -28,8 +28,11 @@ pub class TextArea < Widget
   end
 
   # Not a user edit: no on_change. Line breaks become "\n", as in a paste.
+  # New text is shown from its start: caret at 0, nothing selected, scrolled to the top.
   pub def text=(s : String) : Nil
     @edit.set(lf(s))
+    @edit.move_to(0, false)
+    @offset = 0_f32
     @last = @edit.text
     @upstream = false
     @want_x = nil
