@@ -44,6 +44,8 @@ pub abstract class Widget
   property focused : Bool = false
   # Meaningful at the root.
   property needs_frame : Bool = false
+  # Set on an overlay root by whoever shows it: Ui hides the overlay once the owner leaves the tree.
+  property owner : Widget? = nil
 
   pub def children : Array(Widget)
     [] of Widget
@@ -167,4 +169,10 @@ pub abstract class Context
   pub abstract def clipboard : Clipboard
   pub abstract def focused : Widget?
   pub abstract def focus(w : Widget?) : Nil
+  # The popup currently shown above the root, if any (one at a time).
+  pub abstract def overlay : Widget?
+  # Shows w above everything, at the bottom-left of `below` (above it if that would leave the window).
+  # A click outside it, Escape, a Wheel or a resize hides it; the click or wheel does not go further.
+  pub abstract def show_overlay(w : Widget, below : Rect) : Nil
+  pub abstract def hide_overlay : Nil
 end

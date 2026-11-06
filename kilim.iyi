@@ -17,6 +17,7 @@ pub import kilim/textbox
 pub import kilim/text_area
 pub import kilim/scroll
 pub import kilim/list_view
+pub import kilim/dropdown
 pub import kilim/event
 pub import kilim/window
 
@@ -70,6 +71,12 @@ pub def list_view(on_select : (Int32 -> Nil)? = nil, sizing : Kilim::Widget::Siz
   l = Kilim::ListView::ListView.new(on_select)
   l.sizing = sizing
   l
+end
+
+pub def dropdown(options : Array(String), selected : Int32 = 0, on_change : (Int32 -> Nil)? = nil, sizing : Kilim::Widget::Sizing = Kilim::Widget::Sizing.fit) : Kilim::Dropdown::Dropdown
+  d = Kilim::Dropdown::Dropdown.new(options, selected, on_change)
+  d.sizing = sizing
+  d
 end
 
 pub def fit : Kilim::Widget::Sizing

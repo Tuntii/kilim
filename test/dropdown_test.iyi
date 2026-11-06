@@ -1,0 +1,180 @@
+# Ui overlay layer and Dropdown.
+
+module test/dropdown_test
+
+import kilim/geom::{Rect, Size}
+import kilim/event::*
+import kilim/widget::*
+import kilim/box::*
+import kilim/ui::{Ui}
+import kilim/button::{Button}
+import kilim/scroll::{Scroll}
+import kilim/dropdown::{Dropdown}
+import kilim/testing::*
+
+class Log
+  property picks : Array(Int32) = [] of Int32
+end
+
+def setup(log : Log, options : Array(String) = ["To do", "Doing", "Done"]) : Tuple(Box, Dropdown, Ui)
+  d = Dropdown.new(options, 0, ->(i : Int32) { log.picks << i; nil })
+  col = Box.new(Axis::Column, [d] of Widget)
+  ui = Ui.new(col, RecordCanvas.new, MemoryClipboard.new)
+  ui.resize(300_f32, 200_f32)
+  ui.frame
+  {col, d, ui}
+end
+
+def press(ui : Ui, x : Float32, y : Float32) : Nil
+  ui.dispatch MouseMove.new(x, y)
+  ui.dispatch MouseDown.new(x, y, MouseButton::Left)
+  ui.dispatch MouseUp.new(x, y, MouseButton::Left)
+end
+
+def click(ui : Ui, w : Widget) : Nil
+  press(ui, w.bounds.x + w.bounds.w / 2, w.bounds.y + w.bounds.h / 2)
+end
+
+def key(ui : Ui, k : Key) : Nil
+  ui.dispatch KeyDown.new(k, Mods.new)
+end
+
+def main : Int32
+  # click opens, click on the third option picks it and closes
+  log = Log.new
+  col, d, ui = setup(log)
+  click(ui, d)
+  expect !ui.overlay.nil?, "click opens the overlay"
+  ui.frame
+  if o = ui.overlay
+    expect_eq o.children.size, 3, "one row per option"
+    expect_eq o.bounds.y, d.bounds.y + d.bounds.h, "popup sits below the dropdown"
+    click(ui, o.children[2])
+  end
+  expect_eq log.picks, [2], "on_change(2)"
+  expect_eq d.selected, 2, "selected"
+  expect ui.overlay.nil?, "pick closes"
+
+  # Down while closed changes the selection; it stops at the last option
+  log = Log.new
+  col, d, ui = setup(log)
+  ui.focus(d)
+  key(ui, Key::Down)
+  expect_eq d.selected, 1, "Down selects the next option"
+  expect_eq log.picks, [1], "on_change on Down"
+  key(ui, Key::Down)
+  key(ui, Key::Down)
+  expect_eq log.picks, [1, 2], "no callback past the end"
+  key(ui, Key::Up)
+  expect_eq d.selected, 1, "Up"
+  expect ui.overlay.nil?, "arrows do not open"
+
+  # keyboard: Space opens, Down moves the highlight, Enter picks
+  log = Log.new
+  col, d, ui = setup(log)
+  ui.focus(d)
+  key(ui, Key::Space)
+  expect !ui.overlay.nil?, "Space opens"
+  key(ui, Key::Down)
+  expect log.picks.empty?, "moving the highlight picks nothing"
+  key(ui, Key::Enter)
+  expect_eq log.picks, [1], "Enter picks the highlighted option"
+  expect ui.overlay.nil?, "Enter closes"
+
+  # Escape closes without a change
+  log = Log.new
+  col, d, ui = setup(log)
+  ui.focus(d)
+  key(ui, Key::Enter)
+  key(ui, Key::Down)
+  key(ui, Key::Escape)
+  expect ui.overlay.nil?, "Escape closes"
+  expect log.picks.empty? && d.selected == 0, "Escape changes nothing"
+
+  # a click outside closes and does not reach the widget under it
+  log = Log.new
+  hits = Log.new
+  b = Button.new("below", -> { hits.picks << 1; nil })
+  d = Dropdown.new(["a", "b"], 0, ->(i : Int32) { log.picks << i; nil })
+  col = Box.new(Axis::Column, [b, d] of Widget)
+  ui = Ui.new(col, RecordCanvas.new, MemoryClipboard.new)
+  ui.resize(300_f32, 200_f32)
+  ui.frame
+  click(ui, d)
+  ui.frame
+  expect !ui.overlay.nil?, "open"
+  click(ui, b)
+  expect ui.overlay.nil?, "outside click closes"
+  expect hits.picks.empty?, "the outside click does not reach the widget under it"
+  expect log.picks.empty?, "no change"
+
+  # no options: does not open, keys do nothing
+  log = Log.new
+  col, d, ui = setup(log, [] of String)
+  ui.focus(d)
+  click(ui, d)
+  expect ui.overlay.nil?, "empty dropdown does not open"
+  key(ui, Key::Down)
+  key(ui, Key::Enter)
+  expect log.picks.empty? && d.selected == 0, "keys do nothing without options"
+
+  # removing the owner while open hides the overlay
+  log = Log.new
+  col, d, ui = setup(log)
+  click(ui, d)
+  expect !ui.overlay.nil?, "open before removal"
+  col.remove(d)
+  ui.dispatch MouseMove.new(250_f32, 150_f32)
+  expect ui.overlay.nil?, "overlay hidden when its owner left the tree"
+
+  # near the bottom of the window the popup flips above
+  log = Log.new
+  d = Dropdown.new(["a", "b", "c"], 0)
+  col = Box.new(Axis::Column, [Box.new(Axis::Column, [] of Widget, sizing: Sizing.fill), d] of Widget)
+  ui = Ui.new(col, RecordCanvas.new, MemoryClipboard.new)
+  ui.resize(300_f32, 200_f32)
+  ui.frame
+  click(ui, d)
+  ui.frame
+  expect !ui.overlay.nil?, "open near the bottom"
+  if o = ui.overlay
+    expect o.bounds.y + o.bounds.h <= d.bounds.y, "popup flipped above"
+  end
+
+  # a wheel hides the popup (it would be left behind by the scrolling list) and is swallowed
+  log = Log.new
+  d = Dropdown.new(["a", "b", "c"], 0, ->(i : Int32) { log.picks << i; nil })
+  pad = Box.new(Axis::Column, [] of Widget, sizing: Sizing.fixed(400_f32))
+  sc = Scroll.new(Box.new(Axis::Column, [d, pad] of Widget))
+  ui = Ui.new(sc, RecordCanvas.new, MemoryClipboard.new)
+  ui.resize(300_f32, 200_f32)
+  ui.frame
+  click(ui, d)
+  ui.frame
+  expect !ui.overlay.nil?, "open inside a scroll"
+  ui.dispatch Wheel.new(150_f32, 150_f32, -1_f32)
+  expect ui.overlay.nil?, "wheel hides the overlay"
+  expect log.picks.empty? && d.selected == 0, "wheel changes no selection"
+  click(ui, d)
+  ui.frame
+  if o = ui.overlay
+    ui.dispatch Wheel.new(o.bounds.x + 5, o.bounds.y + 5, -1_f32)
+  end
+  expect ui.overlay.nil?, "wheel over the popup hides it too"
+
+  # a resize hides the popup
+  log = Log.new
+  col, d, ui = setup(log)
+  click(ui, d)
+  expect !ui.overlay.nil?, "open before resize"
+  ui.resize(200_f32, 200_f32)
+  expect ui.overlay.nil?, "Ui#resize hides the overlay"
+  click(ui, d)
+  ui.dispatch Resize.new(250_f32, 200_f32)
+  expect ui.overlay.nil?, "Resize event hides the overlay"
+
+  puts "dropdown ok"
+  0
+end
+
+exit main

@@ -20,6 +20,7 @@ import kilim/label::{Label}
 import kilim/button::{Button}
 import kilim/textbox::{Textbox}
 import kilim/text_area::{TextArea}
+import kilim/dropdown::{Dropdown}
 import kilim/window::{Window}
 import kilim/canvas::{Color}
 import kilim/theme::*
@@ -74,7 +75,8 @@ def main : Int32
   input = Textbox.new
   notes = TextArea.new
   title = Label.new("Merhaba şöğüt")
-  root = Box.new(Axis::Column, [title, button, input, notes] of Widget, padding: PAD, spacing: 8_f32)
+  status = Dropdown.new(["To do", "Doing", "Done"])
+  root = Box.new(Axis::Column, [title, button, input, notes, status] of Widget, padding: PAD, spacing: 8_f32)
   win = Window.new("smoke", 320, 200, root)
   win.step
   canvas = win.canvas
@@ -218,6 +220,21 @@ def main : Int32
   win.step
   fail("text area holds #{notes.text.inspect}, expected \"Çalış\nşöğüt\"") unless notes.text == "Çalış\nşöğüt"
   puts "text area: ok"
+
+  # Dropdown: a posted click opens the list, a click on the third option picks it.
+  win.step
+  post(win, WM_LBUTTONDOWN, 1_u64, at(win, status.bounds.x + 10, status.bounds.y + 10))
+  post(win, WM_LBUTTONUP, 0_u64, at(win, status.bounds.x + 10, status.bounds.y + 10))
+  win.step
+  pop = win.ui.overlay
+  fail("a click did not open the dropdown") unless pop
+  row = pop.children[2].bounds
+  post(win, WM_LBUTTONDOWN, 1_u64, at(win, row.x + 10, row.y + 10))
+  post(win, WM_LBUTTONUP, 0_u64, at(win, row.x + 10, row.y + 10))
+  win.step
+  fail("dropdown holds option #{status.selected}, expected 2") unless status.selected == 2
+  fail("the list stayed open after a pick") unless win.ui.overlay.nil?
+  puts "dropdown: ok"
 
   # Timers: a repeating timer ticks while the loop steps, and stops once cancelled.
   ticks = 0

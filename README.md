@@ -72,6 +72,7 @@ list with a textbox, buttons, checkboxes, scrolling and Turkish text.
 | `checkbox(text, checked:, on_change:, sizing:)` | A checkbox with a label. Checked items are drawn struck through. |
 | `textbox(placeholder, on_change:, on_submit:, sizing:)` | A single-line text field with copy and paste. |
 | `text_area(placeholder, on_change:, sizing:)` | A multi-line text field that wraps words and scrolls on its own. Enter starts a new line; Up, Down, Home and End move by visual line. |
+| `dropdown(options, selected:, on_change:, sizing:)` | Shows the chosen option; a click, Space or Enter opens the list as an overlay. Up and Down change the choice, Enter or a click picks, Escape or a click outside closes (that click does not reach the widget under it). |
 | `scroll(child, sizing:)` | A vertically scrolling viewport with a scrollbar. |
 | `list_view(on_select:, sizing:)` | A selectable list; set `rows =` to `ListRow`s (title, optional detail line, header rows). Up, Down, PageUp and PageDown move the selection; long text ends in an ellipsis. |
 

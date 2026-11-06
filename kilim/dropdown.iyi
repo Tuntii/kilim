@@ -1,0 +1,165 @@
+# Dropdown: shows the chosen option; its list opens as an overlay.
+
+module kilim/dropdown
+
+import std/float
+import kilim/geom::{Rect, Size}
+import kilim/canvas::{Canvas}
+import kilim/event::*
+import kilim/widget::*
+import kilim/box::*
+import kilim/theme::*
+
+# The open list: a column of rows on a white card.
+class Popup < Box
+  def initialize(rows : Array(Widget))
+    super(Axis::Column, rows)
+  end
+
+  pub def draw(c : Canvas) : Nil
+    c.fill_rect(bounds, POPUP_BG)
+    super
+    c.stroke_rect(bounds, BORDER)
+  end
+end
+
+class OptionRow < Widget
+  def initialize(@owner_dd : Dropdown, @index : Int32, @text : String)
+  end
+
+  pub def preferred(c : Canvas) : Size
+    Size.new(c.measure(@text).w + 2 * PADDING, CONTROL_H)
+  end
+
+  pub def draw(c : Canvas) : Nil
+    c.fill_rect(bounds, ROW_SELECTED) if hovered || @owner_dd.highlight == @index
+    c.text(bounds.x + PADDING, bounds.y + (bounds.h - c.line_height) / 2, @text, @owner_dd.selected == @index ? ACCENT : FG)
+  end
+
+  # Picks on release, like a button click.
+  pub def handle(e : Event, ui : Context) : Bool
+    case e
+    when MouseDown
+      e.button.left?
+    when MouseUp
+      @owner_dd.pick(@index, ui) if bounds.contains?(e.x, e.y)
+      true
+    else
+      false
+    end
+  end
+end
+
+pub class Dropdown < Widget
+  getter options : Array(String)
+  getter selected : Int32
+  property on_change : (Int32 -> Nil)?
+  # The option the keyboard would pick while the list is open.
+  getter highlight : Int32 = 0
+
+  def initialize(@options : Array(String), @selected : Int32 = 0, @on_change : (Int32 -> Nil)? = nil)
+  end
+
+  # Does not call on_change (the app is the one setting it).
+  pub def selected=(i : Int32) : Nil
+    @selected = i
+    invalidate
+  end
+
+  pub def focusable? : Bool
+    true
+  end
+
+  pub def preferred(c : Canvas) : Size
+    w = 0_f32
+    @options.each do |o|
+      m = c.measure(o).w
+      w = m if m > w
+    end
+    Size.new(w + 2 * PADDING + CHECK_BOX, CONTROL_H)
+  end
+
+  pub def draw(c : Canvas) : Nil
+    c.fill_rect(bounds, pressed ? BUTTON_PRESSED : (hovered ? BUTTON_HOVER : BUTTON_BG))
+    c.stroke_rect(bounds, focused ? FOCUS_RING : BORDER)
+    if @selected >= 0 && @selected < @options.size
+      c.text(bounds.x + PADDING, bounds.y + (bounds.h - c.line_height) / 2, @options[@selected], FG)
+    end
+    # Down arrow.
+    ax = bounds.x + bounds.w - PADDING - CHECK_BOX / 2
+    ay = bounds.y + bounds.h / 2
+    c.line(ax - 4, ay - 2, ax, ay + 2, MUTED)
+    c.line(ax, ay + 2, ax + 4, ay - 2, MUTED)
+  end
+
+  pub def handle(e : Event, ui : Context) : Bool
+    case e
+    when MouseDown
+      return false unless e.button.left?
+      open(ui)
+      true
+    when KeyDown
+      return false if @options.empty?
+      if open?(ui)
+        case e.key
+        when Key::Up    then move_highlight(-1)
+        when Key::Down  then move_highlight(1)
+        when Key::Enter, Key::Space then pick(@highlight, ui)
+        else
+          return false
+        end
+        true
+      else
+        case e.key
+        when Key::Up    then choose(@selected - 1)
+        when Key::Down  then choose(@selected + 1)
+        when Key::Enter, Key::Space then open(ui)
+        else
+          return false
+        end
+        true
+      end
+    else
+      false
+    end
+  end
+
+  pub def pick(i : Int32, ui : Context) : Nil
+    ui.hide_overlay
+    choose(i)
+  end
+
+  def open?(ui : Context) : Bool
+    if o = ui.overlay
+      return o.owner == self
+    end
+    false
+  end
+
+  def open(ui : Context) : Nil
+    return if @options.empty? || open?(ui)
+    @highlight = @selected < 0 ? 0 : (@selected >= @options.size ? @options.size - 1 : @selected)
+    rows = [] of Widget
+    @options.each_with_index { |o, i| rows << OptionRow.new(self, i, o) }
+    popup = Popup.new(rows)
+    popup.owner = self
+    ui.show_overlay(popup, bounds)
+  end
+
+  def move_highlight(d : Int32) : Nil
+    j = @highlight + d
+    return if j < 0 || j >= @options.size
+    @highlight = j
+    invalidate
+  end
+
+  # Selects i if it is a different, valid option.
+  def choose(i : Int32) : Nil
+    return if i < 0 || i >= @options.size || i == @selected
+    @selected = i
+    invalidate
+    if f = @on_change
+      f.call(i)
+    end
+  end
+end
