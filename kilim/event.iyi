@@ -19,9 +19,42 @@ pub enum Key
   Home
   End
   Escape
+  Up
+  Down
+  PageUp
+  PageDown
+  A
+  B
   C
+  D
+  E
+  F
+  G
+  H
+  I
+  J
+  K
+  L
+  M
+  N
+  O
+  P
+  Q
+  R
+  S
+  T
+  U
   V
+  W
+  X
+  Y
+  Z
   Other
+end
+
+# The letter key for index 0 (A) to 25 (Z).
+pub def letter_key(i : Int32) : Key
+  Key.new(Key::A.value + i)
 end
 
 # primary: Ctrl (Windows/Linux) or Cmd (macOS).

@@ -153,6 +153,12 @@ pub class WinWindow
     LibWin.GetTickCount64.unsafe_to_i64
   end
 
+  # Runs the block on a matching KeyDown instead of the focused widget. With
+  # primary: false it applies only while no text field is focused.
+  pub def shortcut(key : Key, primary : Bool = true, shift : Bool = false, &fn : -> Nil) : Nil
+    @ui.shortcut(key, primary, shift, &fn)
+  end
+
   pub def inject(e : Event) : Nil
     @ui.dispatch(e)
   end
@@ -372,8 +378,11 @@ pub class WinWindow
     when VK_HOME   then Key::Home
     when VK_END    then Key::End
     when VK_ESCAPE then Key::Escape
-    when VK_C      then Key::C
-    when VK_V      then Key::V
+    when VK_UP     then Key::Up
+    when VK_DOWN   then Key::Down
+    when VK_PRIOR  then Key::PageUp
+    when VK_NEXT   then Key::PageDown
+    when VK_A..VK_Z then letter_key((vk - VK_A).to_i32)
     else                Key::Other
     end
   end

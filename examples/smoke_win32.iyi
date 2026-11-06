@@ -94,6 +94,16 @@ def main : Int32
   win.step
   fail("counter after click + Enter is #{n.n}, expected 3") unless n.n == 3
 
+  # Shortcuts. A posted WM_KEYDOWN cannot set Ctrl for GetKeyState, so Ctrl+N is
+  # injected; a plain posted letter proves the VK -> Key::<letter> mapping.
+  hits = Counter.new
+  win.shortcut(Key::N) { hits.n += 1; nil }
+  win.shortcut(Key::Q, primary: false) { hits.n += 10; nil }
+  win.inject KeyDown.new(Key::N, Mods.new(primary: true))
+  post(win, WM_KEYDOWN, 0x51_u64, 1_i64)
+  win.step
+  fail("shortcut hits are #{hits.n}, expected 11") unless hits.n == 11
+
   # Typed text: a BMP letter, a surrogate pair in two messages, a control character
   # (Ctrl+C arrives as 0x03) that must not be typed, and ASCII.
   win.inject KeyDown.new(Key::Tab, Mods.new)

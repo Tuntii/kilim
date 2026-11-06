@@ -116,7 +116,10 @@ inbox its loop checks for values every 10 ms instead.
 
 **Keyboard.** Tab and Shift+Tab move focus. In a textbox, use the arrow keys,
 Home/End, Backspace/Delete and Enter, plus Ctrl/Cmd+V to paste. Ctrl/Cmd+C
-copies the whole text, because there is no selection yet.
+copies the whole text, because there is no selection yet. `window.shortcut(Key::N) { ... }`
+runs a block on Ctrl/Cmd+N before the focused widget sees the key; with
+`primary: false` (a plain key such as Delete) it applies only while no text field
+is focused.
 
 ## Installation
 
