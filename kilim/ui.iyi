@@ -10,6 +10,16 @@ import kilim/event::*
 import kilim/widget::*
 import kilim/theme::*
 
+class Shortcut
+  getter key : Key
+  getter primary : Bool
+  getter shift : Bool
+  getter fn : -> Nil
+
+  def initialize(@key : Key, @primary : Bool, @shift : Bool, @fn : -> Nil)
+  end
+end
+
 pub class Ui < Context
   getter hovered : Widget? = nil
   getter captured : Widget? = nil
@@ -17,6 +27,7 @@ pub class Ui < Context
   getter clipboard : Clipboard
 
   def initialize(@root : Widget, @canvas : Canvas, @clipboard : Clipboard)
+    @shortcuts = [] of Shortcut
     @w = 0_f32
     @h = 0_f32
     @root.needs_frame = true
@@ -86,6 +97,20 @@ pub class Ui < Context
     end
   end
 
+  # Runs the block on a matching KeyDown, which then never reaches the focused
+  # widget. With primary: false it applies only while no text field is focused.
+  pub def shortcut(key : Key, primary : Bool = true, shift : Bool = false, &fn : -> Nil) : Nil
+    @shortcuts << Shortcut.new(key, primary, shift, fn)
+  end
+
+  def run_shortcut(e : KeyDown) : Bool
+    return false if !e.mods.primary && wants_text_input?
+    s = @shortcuts.find { |c| c.key == e.key && c.primary == e.mods.primary && c.shift == e.mods.shift }
+    return false unless s
+    s.fn.call
+    true
+  end
+
   pub def dispatch(e : Event) : Nil
     sanitize
     case e
@@ -104,7 +129,8 @@ pub class Ui < Context
     when Wheel
       bubble(@root.hit(e.x, e.y), e)
     when KeyDown, TextInput
-      if e.is_a?(KeyDown) && e.key.tab?
+      if e.is_a?(KeyDown) && run_shortcut(e)
+      elsif e.is_a?(KeyDown) && e.key.tab?
         move_focus(e.mods.shift ? -1 : 1)
       elsif f = @focused
         f.handle(e, self)

@@ -1,0 +1,51 @@
+# Window-level shortcuts: they take their KeyDown before the focused widget.
+
+module test/shortcut_test
+
+import kilim/event::*
+import kilim/widget::*
+import kilim/box::*
+import kilim/ui::{Ui}
+import kilim/button::{Button}
+import kilim/textbox::{Textbox}
+import kilim/testing::*
+
+class Log
+  property n : Int32 = 0
+  property del : Int32 = 0
+end
+
+def main : Int32
+  lg = Log.new
+  btn = Button.new("b")
+  tb = Textbox.new
+  tb.text = "abc"
+  col = Box.new(Axis::Column, [btn, tb] of Widget)
+  clip = MemoryClipboard.new
+  ui = Ui.new(col, RecordCanvas.new, clip)
+  ui.resize(300_f32, 300_f32)
+  ui.frame
+  ui.shortcut(Key::N) { lg.n += 1; nil }
+  ui.shortcut(Key::Delete, primary: false) { lg.del += 1; nil }
+
+  ctrl = Mods.new(primary: true)
+  ui.focus(tb)
+  ui.dispatch KeyDown.new(Key::N, ctrl)
+  expect lg.n == 1, "Ctrl+N runs once"
+  expect tb.text == "abc", "textbox untouched by Ctrl+N"
+  ui.dispatch KeyDown.new(Key::N, Mods.new)
+  expect lg.n == 1, "plain N is not Ctrl+N"
+  ui.dispatch KeyDown.new(Key::C, ctrl)
+  expect clip.get == "abc", "Ctrl+C without a shortcut still copies"
+
+  ui.dispatch KeyDown.new(Key::Delete, Mods.new)
+  expect lg.del == 0, "plain shortcut skipped while a textbox is focused"
+  ui.focus(btn)
+  ui.dispatch KeyDown.new(Key::Delete, Mods.new)
+  expect lg.del == 1, "plain shortcut runs with a button focused"
+
+  puts "shortcut ok"
+  0
+end
+
+exit main

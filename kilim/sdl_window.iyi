@@ -131,6 +131,12 @@ pub class SdlWindow
     LibSDL3.SDL_GetTicks.unsafe_to_i64
   end
 
+  # Runs the block on a matching KeyDown instead of the focused widget. With
+  # primary: false it applies only while no text field is focused.
+  pub def shortcut(key : Key, primary : Bool = true, shift : Bool = false, &fn : -> Nil) : Nil
+    @ui.shortcut(key, primary, shift, &fn)
+  end
+
   pub def inject(e : Event) : Nil
     @ui.dispatch(e)
   end
@@ -266,8 +272,11 @@ pub class SdlWindow
     when LibSDL3::KEY_HOME                        then Key::Home
     when LibSDL3::KEY_END                         then Key::End
     when LibSDL3::KEY_ESCAPE                      then Key::Escape
-    when LibSDL3::KEY_C                           then Key::C
-    when LibSDL3::KEY_V                           then Key::V
+    when LibSDL3::KEY_UP                          then Key::Up
+    when LibSDL3::KEY_DOWN                        then Key::Down
+    when LibSDL3::KEY_PAGEUP                      then Key::PageUp
+    when LibSDL3::KEY_PAGEDOWN                    then Key::PageDown
+    when LibSDL3::KEY_A..LibSDL3::KEY_Z           then letter_key((code - LibSDL3::KEY_A).to_i32)
     else                                               Key::Other
     end
   end
