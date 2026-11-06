@@ -422,25 +422,27 @@ pub class WinClipboard < Clipboard
     s
   end
 
-  pub def set(s : String) : Nil
+  pub def set(s : String) : Bool
     w = wide(s)
     mem = LibWin.GlobalAlloc(GMEM_MOVEABLE, (w.size * 2).to_u64)
-    return if mem.address == 0
+    return false if mem.address == 0
     p = LibWin.GlobalLock(mem)
     if p.address == 0
       LibWin.GlobalFree(mem)
-      return
+      return false
     end
     dst = p.as(UInt16*)
     w.each_with_index { |u, i| dst[i] = u }
     LibWin.GlobalUnlock(mem)
     if LibWin.OpenClipboard(@hwnd) == 0
       LibWin.GlobalFree(mem)
-      return
+      return false
     end
     LibWin.EmptyClipboard
     # On success the system owns the memory.
-    LibWin.GlobalFree(mem) if LibWin.SetClipboardData(CF_UNICODETEXT, mem).address == 0
+    ok = LibWin.SetClipboardData(CF_UNICODETEXT, mem).address != 0
+    LibWin.GlobalFree(mem) unless ok
     LibWin.CloseClipboard
+    ok
   end
 end

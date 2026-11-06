@@ -65,6 +65,9 @@ pub class RecordCanvas < Canvas
 end
 
 pub class MemoryClipboard < Clipboard
+  # true: set refuses the text, like a clipboard another program holds open.
+  property fail : Bool = false
+
   def initialize
     @text = ""
   end
@@ -73,8 +76,10 @@ pub class MemoryClipboard < Clipboard
     @text
   end
 
-  pub def set(s : String) : Nil
+  pub def set(s : String) : Bool
+    return false if @fail
     @text = s
+    true
   end
 
   @text : String

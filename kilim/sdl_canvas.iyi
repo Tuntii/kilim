@@ -184,7 +184,7 @@ pub class SdlClipboard < Clipboard
     s
   end
 
-  pub def set(s : String) : Nil
+  pub def set(s : String) : Bool
     LibSDL3.SDL_SetClipboardText(s)
   end
 end

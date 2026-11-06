@@ -39,16 +39,22 @@ pub class Ui < Context
   end
 
   pub def resize(w : Float32, h : Float32) : Nil
+    # The popup is anchored to a rect that a new size moves; repaints at the same size keep it.
+    hide_overlay if w != @w || h != @h
     @w = w
     @h = h
-    # The popup is anchored to a rect that the new layout moves.
-    hide_overlay
     @root.needs_frame = true
   end
 
   # After a font size or pixel density change: every widget measures again.
   pub def drop_caches : Nil
     @root.drop_caches
+    if m = @modal
+      m.drop_caches
+    end
+    if o = @overlay
+      o.drop_caches
+    end
     @root.needs_frame = true
   end
 
@@ -150,6 +156,8 @@ pub class Ui < Context
 
   # Does layout + drawing if needed; true if it drew.
   pub def frame : Bool
+    # Timer and inbox handlers change the tree outside dispatch: no ghost popup, modal or focus.
+    sanitize
     return false unless needs_frame?
     @root.needs_frame = false
     @root.layout(Rect.new(0_f32, 0_f32, @w, @h), @canvas)
@@ -180,6 +188,8 @@ pub class Ui < Context
 
   pub def focus(w : Widget?) : Nil
     w = nil if w && !w.focusable?
+    # The modal owns input: app code (a timer, the inbox) cannot focus a widget behind it.
+    return if w && @modal && !in_modal?(w)
     return if w == @focused
     if o = @focused
       o.focused = false
@@ -250,10 +260,15 @@ pub class Ui < Context
       elsif @modal && !(@hovered && (in_modal?(@hovered) || in_overlay?(@hovered)))
         # The dimmed window: nothing happens, focus stays.
       else
-        # The first widget that handles the event gets capture; MouseUp goes to it.
-        @captured = bubble(@hovered, e)
-        # Popup rows are not focus targets: the owner keeps focus.
-        focus(focus_target(@hovered)) unless in_overlay?(@hovered)
+        m = @modal
+        handler = bubble(@hovered, e)
+        # A handler that showed or closed a modal (on_select calling confirm) has placed focus already.
+        if @modal == m
+          # The first widget that handles the event gets capture; MouseUp goes to it.
+          @captured = handler
+          # Popup rows are not focus targets: the owner keeps focus.
+          focus(focus_target(@hovered)) unless in_overlay?(@hovered)
+        end
       end
     when MouseUp
       if c = @captured
@@ -335,6 +350,10 @@ pub class Ui < Context
     n = order.size
     j = i ? (i + dir) % n : (dir > 0 ? 0 : n - 1)
     j += n if j < 0
+    # The popup belongs to the widget focus leaves.
+    if o = @overlay
+      hide_overlay unless o.owner == order[j]
+    end
     focus(order[j])
     order[j].reveal
   end

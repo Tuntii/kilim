@@ -28,8 +28,11 @@ pub class TextArea < Widget
   end
 
   # Not a user edit: no on_change. Line breaks become "\n", as in a paste.
+  # New text is shown from its start: caret at 0, nothing selected, scrolled to the top.
   pub def text=(s : String) : Nil
     @edit.set(lf(s))
+    @edit.move_to(0, false)
+    @offset = 0_f32
     @last = @edit.text
     @upstream = false
     @want_x = nil
@@ -65,6 +68,12 @@ pub class TextArea < Widget
     @lh = c.line_height
     rewrap(@edit.text) if text_w != @wrap_w
     clamp
+  end
+
+  # A new font measures differently at the same width: the next layout rewraps from scratch.
+  pub def drop_caches : Nil
+    super
+    @wrap_w = -1_f32
   end
 
   def text_w : Float32
@@ -274,7 +283,8 @@ pub class TextArea < Widget
       when Key::X
         return false unless e.mods.primary
         return true unless @edit.selection
-        ui.clipboard.set(@edit.selected_text)
+        # The text goes only once the clipboard holds it.
+        return true unless ui.clipboard.set(@edit.selected_text)
         @edit.delete_selection
       when Key::A
         return false unless e.mods.primary

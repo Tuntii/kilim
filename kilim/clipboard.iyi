@@ -4,5 +4,6 @@ module kilim/clipboard
 
 pub abstract class Clipboard
   pub abstract def get : String
-  pub abstract def set(s : String) : Nil
+  # False if the text did not reach the clipboard (e.g. another program holds it open).
+  pub abstract def set(s : String) : Bool
 end
