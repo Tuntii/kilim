@@ -12,10 +12,13 @@ The plan is driven by a real app: **pano**, a desktop project tracker with
 GitHub sync and an MCP server, built with kilim in its own repository. What
 pano needs and kilim lacks comes first.
 
-## Where we are (v0.1.4)
+## Where we are (v0.2.0)
 
-- Widget tree with row/column layout, focus and Tab order, a Unicode-safe
-  textbox, checkboxes, buttons, scrolling, live resize.
+- Widget tree with row/column layout, focus and Tab order, scrolling, live
+  resize. Widgets: label, button, checkbox, text field with selection,
+  multi-line text area, selectable list, dropdown, confirmation dialog.
+- Timers, window shortcuts, and a typed inbox for results from background
+  threads.
 - **Windows: native backend** (Win32 + Direct2D + DirectWrite), the default.
   No DLLs; per-monitor DPI; IME window at the caret; device-loss recovery.
 - **Linux and macOS: SDL3 + SDL3_ttf.** `-Dsdl` selects SDL on Windows too.
@@ -86,15 +89,14 @@ pano needs and kilim lacks comes first.
 Each month lists about ten pull requests. The theme is fixed; the exact list
 can change as the work teaches us something.
 
-### November 2026: v0.2.0, what a real app needs
+### November 2026: v0.2.0, what a real app needs (released 6 November)
 
-The first version of pano ships at the end of the month on top of this
-release.
+All items below shipped in v0.2.0. The first version of pano is built on it.
 
 1. ci: `macos-15` instead of the removed `macos-14`.
 2. feat: timers (`Window#every`, `Window#after`) that wake the event loop.
-3. feat: background work: run a block off the UI thread and post its result
-   back (`Window#post`).
+3. feat: background work: a typed inbox (`Window#inbox`, `Inbox#send`) that
+   hands values from other threads to the UI thread.
 4. feat: keyboard shortcuts at window level (Ctrl on Windows and Linux, Cmd
    on macOS).
 5. feat: a list with a selected row, Up/Down keys and two-line rows truncated
