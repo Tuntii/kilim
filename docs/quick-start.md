@@ -10,10 +10,10 @@ From nothing to a window with a working button, in four steps.
    ```
    module example.com/app
 
-   require github.com/tuntii/kilim v0.1.4
+   require github.com/tuntii/kilim v0.2.0
    ```
 
-   or run `iyi get github.com/tuntii/kilim@v0.1.4`.
+   or run `iyi get github.com/tuntii/kilim@v0.2.0`.
 3. Write `main.iyi`:
 
    ```crystal
