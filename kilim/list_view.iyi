@@ -153,6 +153,8 @@ pub class ListView < Widget
   end
 
   pub def draw(c : Canvas) : Nil
+    # With no selected row to carry the ring, the visible part of the list shows the focus.
+    c.stroke_rect(@bounds.intersect(viewport), FOCUS_RING) if focused && @selected.nil?
     return if @rows.empty?
     measure_rows(c)
     vp = viewport

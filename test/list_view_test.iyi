@@ -169,6 +169,27 @@ def main : Int32
   r = lv.bounds.y + 29 * 40
   expect r >= sc.bounds.y && r + 40 <= sc.bounds.y + sc.bounds.h, "the selected row stays visible"
 
+  # test_focus_ring_without_selection: keyboard users see the focus before anything is selected
+  rc = RecordCanvas.new
+  lv = ListView.new
+  lv.rows = sample
+  ui = Ui.new(Box.new(Axis::Column, [lv] of Widget), rc, MemoryClipboard.new)
+  ui.resize(300_f32, 400_f32)
+  ui.frame
+  ring = "stroke #{lv.bounds.x},#{lv.bounds.y},#{lv.bounds.w},#{lv.bounds.h}"
+  expect !rc.calls.includes?(ring), "no ring without focus"
+  ui.focus(lv)
+  rc.calls.clear
+  ui.frame
+  expect rc.calls.includes?(ring), "focused with nothing selected: a ring around the list"
+  rc.calls.clear
+  key ui, Key::Down
+  expect !rc.calls.includes?(ring), "with a selection the row carries the ring"
+  lv.rows = [] of ListRow
+  rc.calls.clear
+  ui.frame
+  expect rc.calls.includes?(ring), "an empty focused list shows the ring too"
+
   # test_selected_assign_checked
   lv, ui, picked = build(sample)
   lv.selected = 99
