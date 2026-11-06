@@ -111,7 +111,9 @@ end
 `send` is the only kilim call allowed from another thread: a parallel task
 cannot touch the window or its widgets (the compiler refuses it), only the inbox.
 Sent values must be `Share`: strings, numbers, `Share` structs. After the window
-closes, sends are dropped.
+closes, sends are dropped. On Linux a send cannot wake the loop (iyi's worker
+threads there must not call C libraries such as SDL), so while a window has an
+inbox its loop checks for values every 10 ms instead.
 
 **Keyboard.** Tab and Shift+Tab move focus. In a textbox, use the arrow keys,
 Home/End, Backspace/Delete and Enter, plus Ctrl/Cmd+V to paste. Ctrl/Cmd+C
@@ -210,13 +212,13 @@ CI.
 
 Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/)
 (`feat:`, `fix:`, `perf:`, `docs:`, `ci:`, `bench:` and so on), because releases
-are cut from them: after CI passes on `master`,
-[semantic-release](https://github.com/semantic-release/semantic-release) tags
-the next version and publishes the release notes. For now `fix`, `perf` and
-`feat` all make a patch release, and so does a breaking change (`feat!:` or a
-`BREAKING CHANGE:` footer), which the release notes list under "Breaking
-changes". Other types release nothing. A new minor version is tagged by hand
-when the project decides it is time. Pull requests are merged with a merge commit rather than squashed, so
+are cut from them. There is one release a month, run by hand: open the
+Actions tab, pick the CI workflow, "Run workflow" on branch `master`. Once the
+smoke jobs pass, [semantic-release](https://github.com/semantic-release/semantic-release)
+tags the next version and publishes the release notes. `feat` and breaking
+changes (`feat!:` or a `BREAKING CHANGE:` footer) make the minor release; `fix`
+and `perf` alone make a patch. Other types release nothing. Pull requests are
+merged with a merge commit rather than squashed, so
 each commit keeps its message.
 
 <details>

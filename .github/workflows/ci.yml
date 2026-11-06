@@ -3,6 +3,7 @@ name: ci
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 env:
   IYI_VERSION: 0.20.0
@@ -22,7 +23,7 @@ jobs:
           - os: ubuntu-24.04
             wrap: xvfb-run -a
             sdl: ""
-          - os: macos-14
+          - os: macos-15
             wrap: ""
             sdl: ""
     runs-on: ${{ matrix.os }}
@@ -160,13 +161,13 @@ jobs:
             todo_win32.bmp
           if-no-files-found: warn
 
-  # Releases from master once every platform passed: semantic-release reads the
+  # Releases from master on demand (Run workflow) once every platform passed: semantic-release reads the
   # Conventional Commits since the last tag, picks the version (release.config.mjs),
   # tags it and publishes a GitHub release with the notes.
   release:
     name: release
     needs: smoke
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-24.04
     permissions:
       contents: write

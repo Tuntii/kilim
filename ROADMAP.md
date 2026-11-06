@@ -1,226 +1,318 @@
 # kilim roadmap
 
-kilim's goal is to make desktop GUI apps practical in iyi, in the spirit of
-V's `ui`: widgets drawn by kilim itself, the same look on every platform, and
-a small declarative API.
+kilim's goal is to be **the** GUI library for iyi: everything a desktop app
+needs, with widgets drawn by kilim itself, the same look on every platform,
+and a small declarative API in the spirit of V's `ui`.
 
-v0.1 proved the base: SDL3 + SDL3_ttf bindings, a widget tree with row/column
-layout, focus and Tab order, a Unicode-safe textbox, scrolling, HiDPI-aware
-drawing, live resize, and a to-do example that tests itself in CI on Windows,
-Linux and macOS.
+This is the plan for the thirteen months from November 2026 to November 2027:
+**one release a month and about ten pull requests a month**, ending with
+**v1.0.0** in November 2027.
 
-The milestones below are ordered by priority, not by date. Each one ships as a
-tagged release that passes the full CI matrix.
+The plan is driven by a real app: **pano**, a desktop project tracker with
+GitHub sync and an MCP server, built with kilim in its own repository. What
+pano needs and kilim lacks comes first.
+
+## Where we are (v0.1.4)
+
+- Widget tree with row/column layout, focus and Tab order, a Unicode-safe
+  textbox, checkboxes, buttons, scrolling, live resize.
+- **Windows: native backend** (Win32 + Direct2D + DirectWrite), the default.
+  No DLLs; per-monitor DPI; IME window at the caret; device-loss recovery.
+- **Linux and macOS: SDL3 + SDL3_ttf.** `-Dsdl` selects SDL on Windows too.
+- CI on Windows, Linux and macOS: unit tests, smoke tests, a self-driving
+  to-do app with screenshots, and benchmarks.
+- Performance (Windows desktop, debug build, full frame of the to-do list):
+
+  | | 100 rows | 1,000 rows | 10,000 rows |
+  |---|---:|---:|---:|
+  | kilim core (layout + draw calls) | 0.03 ms | 0.29 ms | 3.0 ms |
+  | Native window (Direct2D) | 0.59 ms | 0.95 ms | 4.2 ms |
+  | SDL window | 0.26 ms | 0.68 ms | 3.8 ms |
+
+  A release build is 2-6x faster. The costs that grow with the tree: every
+  keystroke lays out the whole tree again (about 3 ms at 10,000 rows), and
+  hit-testing scans children one by one (0.14 ms per mouse move at 10,000
+  rows).
+
+## What 1.0 contains
+
+| Area | At 1.0 |
+|---|---|
+| Layout | row, column, grid, stack, scroll (both axes), split pane, tabs; alignment, min/max sizes |
+| Input | button, checkbox, radio group, toggle switch, slider, number field, text field, password field, multi-line text area, dropdown, date picker, colour picker |
+| Display | label (wrapping), image, progress bar, spinner, tooltip, toast |
+| Data | virtual list, table with resizable and sortable columns, tree view |
+| App | menu bar, context menus, toolbar, status bar, modal and file dialogs, multiple windows, keyboard shortcuts, file drop, cursors, timers and animation, a custom-drawing widget |
+| Text | selection, undo/redo, inline IME, Turkish, emoji and CJK; font sizes and weights, styled text, a Markdown view |
+| Look | light, dark and high-contrast themes, following the system; rounded corners; per-widget styles |
+| Platforms | Windows, Linux and macOS on x86-64 and arm64; native backends on Windows and (if the spike works) macOS |
+| Quality | screen-reader support on Windows and macOS, packaging guides, API reference, tutorial, examples gallery |
 
 ## Decisions
 
-- **Two rendering backends, both production quality.**
-  - `renderer` uses `SDL_Renderer`. It is the most compatible and works with
-    software rendering.
-  - `gpu` uses the SDL GPU API (Vulkan, Metal, Direct3D 12) and is the fast
-    path.
-
-  Both draw through the same `Canvas` interface, so every widget, layout and
-  app runs unchanged on either one and looks the same. An app can pick a
-  backend. By default kilim tries `gpu` and falls back to `renderer` when no
-  GPU device can be created. The interface stays small, so further backends
-  remain possible.
+- **Native backends where they pay off.** Windows is native and stays the
+  default. macOS goes native in March 2027 if the February spike shows iyi can
+  drive AppKit ([#9](https://github.com/Tuntii/kilim/issues/9)); otherwise it
+  stays on SDL. Linux stays on SDL for this year.
+- **No SDL GPU backend.** It was planned as the fast path, but the native
+  backends already draw on the GPU and the benchmarks show kilim's own layout
+  and draw traversal, not the backend, is the cost that grows. The effort goes
+  into partial layout and redraw instead.
 - **Five platforms:** Windows x86-64, Linux x86-64, Linux arm64, macOS arm64
-  and macOS x86-64 (Intel).
-- **Everything runs in CI:** every platform with every backend, plus
-  performance benchmarks.
-- **Performance comes before new features.** Rendering speed and the GPU
-  backend come before text-editing and widget work.
+  and macOS x86-64.
+- **Everything runs in CI**, on every platform, including benchmarks with a
+  regression gate from January 2027.
+- **Performance comes before new features**, so the first two months are
+  fixes and speed.
 
-## Native backends
+## How releases work
 
-kilim is moving off SDL to each operating system's own APIs. The core
-(widgets, layout, `Ui`) only knows `Canvas` and `Clipboard`, so a backend is a
-window, a canvas and a clipboard; `kilim/window` picks one at compile time.
+- **One minor release a month**, v0.2.0 in November 2026 to v0.13.0 in October
+  2027, then v1.0.0 in November 2027.
+- Work merges to `master` all month. The release is cut in the last week of
+  the month, from whatever is on `master` and green. A planned item that is
+  not ready moves to the next month instead of delaying the release.
+- semantic-release runs on demand (a manual workflow run) instead of on every
+  merge. Before 1.0, `feat` and breaking changes make the minor release; a
+  month with only fixes makes a patch release. An urgent fix between releases
+  ships as a patch the same way.
+- Commit messages stay Conventional Commits, and pull requests are merged
+  with a merge commit.
+- The quick start (`docs/quick-start.md`) is bumped to the new version right
+  after each release.
 
-- **Windows: done.** Win32 window and message loop, Direct2D drawing and
-  DirectWrite text (`kilim/win_window`, `kilim/d2d_canvas`). It is the default
-  on Windows; `-Dsdl` selects SDL. Tested in CI by `examples/smoke_win32.iyi`
-  and the to-do selftest. Text uses the embedded Noto Sans through DirectWrite's
-  in-memory font loader, with the system font fallback for emoji and CJK; the
-  IME is switched on only while a text field is focused, and its composition
-  window follows the caret. A lost GPU device recreates the render target
-  (simulated in the smoke test, since it cannot be caused on demand), and the
-  smoke test checks the screenshot's pixels at 150 %: fill colours exactly,
-  text only for ink. A pixel comparison with the SDL screenshots was dropped,
-  because the two text stacks rasterise differently.
-- **macOS: next.** Cocoa through the Objective-C runtime, CoreGraphics and
-  CoreText.
-- **Linux: open.** X11 or Wayland plus a text stack (FreeType, HarfBuzz,
-  fontconfig) is the most work; SDL stays the Linux backend until then.
+## Monthly plan
 
-Open decision: whether the SDL GPU backend (v0.3) is still wanted once each
-platform has a native backend.
+Each month lists about ten pull requests. The theme is fixed; the exact list
+can change as the work teaches us something.
 
-## CI matrix (target)
+### November 2026: v0.2.0, what a real app needs
 
-| Platform | Runner | iyi | `renderer` | `gpu` |
-|---|---|---|---|---|
-| Windows x86-64 | `windows-latest` | native | yes | D3D12, or WARP if the runner has no GPU |
-| Linux x86-64 | `ubuntu-24.04` + Xvfb | native | yes | Vulkan through lavapipe (Mesa software Vulkan) |
-| Linux arm64 | `ubuntu-24.04-arm` + Xvfb | cross-compiled from x86-64, linked on the runner ([#1](https://github.com/Tuntii/kilim/issues/1)) | yes | Vulkan through lavapipe |
-| macOS arm64 | `macos-15` | native | yes | Metal |
-| macOS x86-64 | `macos-15-intel` | cross-compiled from arm64, linked on the runner ([#2](https://github.com/Tuntii/kilim/issues/2)) | yes | Metal |
+The first version of pano ships at the end of the month on top of this
+release.
+
+1. ci: `macos-15` instead of the removed `macos-14`.
+2. feat: timers (`Window#every`, `Window#after`) that wake the event loop.
+3. feat: background work: run a block off the UI thread and post its result
+   back (`Window#post`).
+4. feat: keyboard shortcuts at window level (Ctrl on Windows and Linux, Cmd
+   on macOS).
+5. feat: a list with a selected row, Up/Down keys and two-line rows truncated
+   with an ellipsis.
+6. feat: text selection in the text field: click to place the caret, drag,
+   Shift+arrows, Ctrl/Cmd+A; copy and cut act on the selection.
+7. feat: a multi-line text area: wrapping, vertical scrolling, Up/Down,
+   line-wise Home/End, selection, multi-line paste.
+8. feat: a dropdown, and the overlay layer for popups.
+9. feat: a modal confirmation dialog.
+10. fix: hover after scrolling and removal, Tab scrolls the focused widget
+    into view, the wheel goes to the parent at a scroll limit, no `on_change`
+    on programmatic `text=`; perf: binary search for hit-testing.
+11. ci: run semantic-release on demand, `feat` makes a minor release; release
+    v0.2.0.
+
+### December 2026: v0.3.0, fixes and what pano needs next
+
+1. ci: a `permissions:` block, Node 24 actions, cache the SDL build on Linux.
+2. fix: lay out before hit-testing when a frame is pending, so a batch of
+   mouse events does not hit the previous layout.
+3. fix(textbox): shrink `scroll_x` when text gets shorter, filter control
+   characters on paste.
+4. fix: keep the caret blinking while events arrive; key repeat does not
+   toggle a checkbox again and again.
+5. feat: drag and drop between widgets (for pano's board view).
+6. feat: double-click selects a word; word-wise caret movement
+   (Ctrl/Alt+arrows).
+7. feat: undo and redo in text fields and the text area.
+8. feat: labels wrap to their width.
+9. perf: the text area lays out only the visible lines, so long notes stay
+   fast.
+10. docs: recommend `--release` builds; README performance numbers for the
+    native backend.
+
+### January 2027: v0.4.0, partial layout and redraw
+
+1. bench: count idle wake-ups per second.
+2. ci: benchmark regression gate (median of several runs, agreed threshold).
+3. perf: skip `layout` for subtrees that did not change.
+4. perf: dirty rectangles in `Ui`: invalidation records what changed.
+5. perf(win32): draw and present only the dirty rectangles.
+6. perf(sdl): redraw only the dirty rectangles.
+7. perf(win32): find and remove the 0.3 ms fixed cost per native frame
+   (brush colour changes, present).
+8. perf(sdl): glyph atlas through SDL3_ttf's text engine, so a changed string
+   needs no new texture.
+9. test: invalidation and dirty-rectangle tests for every widget.
+10. docs: a performance guide for app authors.
+
+### February 2027: v0.5.0, five platforms in CI and the macOS spike
+
+1. ci: Linux arm64 spike, one program cross-compiled, linked and run
+   ([#1](https://github.com/Tuntii/kilim/issues/1)).
+2. ci: Linux arm64 runs the whole suite.
+3. ci: macOS x86-64 spike ([#2](https://github.com/Tuntii/kilim/issues/2)).
+4. ci: macOS x86-64 runs the whole suite.
+5. spike(macos): typed `objc_msgSend` calls and `CGRect` by value from iyi
+   ([#9](https://github.com/Tuntii/kilim/issues/9)).
+6. spike(macos): an `NSView` subclass with iyi callbacks, and kilim's own run
+   loop at ~0 % idle CPU.
+7. test: pixel checks on the SDL screenshots, like the native smoke test.
+8. ci: benchmarks from all five platforms in one summary.
+9. fix(sdl): a failing `SDL_WaitEvent` no longer busy-loops; a `Window` dropped
+   without `close` no longer leaves a dangling event-watch pointer.
+10. docs: a platform support table.
+
+### March 2027: v0.6.0, native macOS backend
+
+If the February spike failed, macOS stays on SDL, this month starts the text
+work of April, and everything after it moves up a month.
+
+1. feat(macos): Objective-C runtime and framework bindings (`kilim/cocoa`).
+2. feat(macos): window and run loop (`MacWindow`).
+3. feat(macos): CoreGraphics canvas: rectangles, lines, clipping.
+4. feat(macos): CoreText drawing and measuring, with the embedded Noto Sans.
+5. feat(macos): mouse, trackpad scrolling and keyboard events.
+6. feat(macos): text input through `NSTextInputClient`, IME included.
+7. feat(macos): clipboard through `NSPasteboard`.
+8. feat(macos): Retina scale and moving between displays.
+9. test(macos): `smoke_macos`, the to-do selftest and benchmarks in CI.
+10. docs: the macOS backend, and `-Dsdl` as the fallback.
+
+### April 2027: v0.7.0, text input complete
+
+1. feat(win32): inline IME composition (the text being composed is drawn in
+   the field).
+2. feat(sdl, macos): inline IME composition.
+3. feat: a password field.
+4. feat: maximum length and read-only text fields.
+5. feat: find in a text area (next and previous match).
+6. feat: Tab and indentation in the text area.
+7. feat: a monospace font option for text fields and areas.
+8. bench: a text area with 10,000 lines.
+9. test: text editing on every backend, including Turkish, emoji and CJK.
+10. docs: a text-input guide.
+
+### May 2027: v0.8.0, rich text
+
+1. feat: font sizes and weights in `Canvas` on every backend.
+2. feat: styled text spans (bold, italic, colour, monospace).
+3. feat: a rich label that wraps styled spans.
+4. feat: links in rich text (click, hover cursor, keyboard).
+5. feat: a Markdown view (headings, lists, emphasis, code, links), for pano's
+   notes.
+6. feat: selection and copy in rich text and the Markdown view.
+7. feat: bold and italic Noto Sans embedded next to the regular face.
+8. perf: cache laid-out rich text.
+9. test: rich text on every backend.
+10. example: a Markdown viewer.
+
+### June 2027: v0.9.0, layout and theming
+
+1. feat: cross-axis alignment (start, centre, end, stretch).
+2. feat: minimum and maximum sizes.
+3. feat: a grid container.
+4. feat: a stack container (children on top of each other).
+5. feat: a theme object; colours and metrics move out of constants.
+6. feat: a built-in dark theme.
+7. feat: follow the system's light or dark setting (Windows, macOS).
+8. feat: rounded corners on every backend.
+9. feat: per-widget style overrides.
+10. docs: a theming guide.
+
+### July 2027: v0.10.0, widgets
+
+1. feat: an overlay layer in `Ui` for popups.
+2. feat: radio group and toggle switch.
+3. feat: slider and number field.
+4. feat: progress bar and spinner.
+5. feat: dropdown.
+6. feat: tooltip and toast notifications.
+7. feat: tabs.
+8. feat: modal dialog.
+9. feat: image widget (`std/png`) and image drawing on every backend.
+10. example: a widget gallery.
+
+### August 2027: v0.11.0, lists and data
+
+1. feat: a virtual list that lays out only the visible rows, benchmarked at
+   100,000 rows.
+2. feat: selection in lists (single and multiple, keyboard).
+3. feat: a table with columns.
+4. feat: resizable and sortable columns.
+5. feat: tree view.
+6. feat: split pane.
+7. feat: horizontal and two-axis scrolling, smooth trackpad scrolling.
+8. feat: date picker.
+9. feat: colour picker.
+10. example: a file-browser style app.
+
+### September 2027: v0.12.0, app features
+
+1. feat: keyboard shortcuts.
+2. feat: menu bar (native on Windows and macOS) and context menus.
+3. feat: toolbar and status bar.
+4. feat: multiple windows per process.
+5. feat: file open and save dialogs (native on Windows and macOS, SDL on
+   Linux).
+6. feat: dropping files onto a window.
+7. feat: window options (minimum size, icon, title changes) and asking before
+   closing (`on_close` can cancel).
+8. feat: mouse cursors (I-beam over text, hand over links).
+9. feat: timers and an animation frame callback.
+10. feat: a custom-drawing widget (an app draws on a `Canvas` itself).
+
+### October 2027: v0.13.0, accessibility and packaging
+
+1. docs: accessibility design (roles, names, focus, actions).
+2. feat(win32): UI Automation for basic widgets.
+3. feat(win32): UI Automation for text fields.
+4. feat(macos): NSAccessibility for basic widgets.
+5. feat: a high-contrast theme, and a keyboard-only pass over every widget.
+6. feat(win32): app icon and manifest in a single exe.
+7. docs: packaging on Windows.
+8. docs: `.app` bundles on macOS (arm64, x86-64, universal).
+9. docs: AppImage on Linux (x86-64, arm64).
+10. ci: build the example apps as packages.
+
+### November 2027: v1.0.0, stable API
+
+1. refactor!: API review and the last breaking renames.
+2. feat: short names from a single import, if iyi allows it by then.
+3. docs: API reference from `iyi doc`, published with GitHub Pages.
+4. docs: a tutorial from an empty folder to a packaged app.
+5. example: an examples gallery (five apps).
+6. chore: move to the newest iyi release (a deliberate, tested upgrade).
+7. test: fuzz text input and layout with random trees.
+8. ci: every platform and benchmark gate required for a release.
+9. docs: a migration guide from 0.x and the 1.0 compatibility promise.
+10. release: v1.0.0.
+
+## Every month
+
+- **Manual checks on real machines**, before the release: Turkish and AltGr
+  typing, a real IME, mouse wheel and natural scrolling, drag-resize, idle CPU,
+  125-150 % scaling, moving between displays.
+- **Housekeeping**: the project board, issues, and the packs.iyi.dev listing
+  ([domify/iyipacks-website#1](https://github.com/domify/iyipacks-website/issues/1)).
+
+## After 1.0
+
+- A native Linux backend (X11 or Wayland, FreeType, HarfBuzz, fontconfig).
+- An optional "rebuild the tree from state" layer on top of the retained
+  widgets.
+- Mobile and web.
+
+## CI matrix (target, February 2027)
+
+| Platform | Runner | iyi | Backend |
+|---|---|---|---|
+| Windows x86-64 | `windows-latest` | native | Win32 + Direct2D, and SDL with `-Dsdl` |
+| Linux x86-64 | `ubuntu-24.04` + Xvfb | native | SDL |
+| Linux arm64 | `ubuntu-24.04-arm` + Xvfb | cross-compiled from x86-64, linked on the runner ([#1](https://github.com/Tuntii/kilim/issues/1)) | SDL |
+| macOS arm64 | `macos-15` | native | SDL; AppKit from March 2027 |
+| macOS x86-64 | `macos-15-intel` | cross-compiled from arm64, linked on the runner ([#2](https://github.com/Tuntii/kilim/issues/2)) | SDL; AppKit from March 2027 |
 
 Each cell runs `iyi test`, the smoke test, the to-do selftest with a
-screenshot, and the benchmarks.
-
-iyi 0.20.0 publishes compiler binaries only for Windows x86-64, Linux x86-64
-and macOS arm64. It can still generate code for `aarch64-linux-gnu` and
-`x86_64-darwin`. So for the other two platforms, CI compiles on a supported
-host and links and runs on the target runner.
-
-One part is still unproven: the GPU cells may have no GPU on hosted
-runners. If no software driver works there, those cells move to a
-self-hosted runner: the Linux VBOT server, and a real Mac.
-
-## v0.1.x: verify and harden
-
-**Check by hand on real machines** (CI has no real keyboard or display):
-
-- [ ] Turkish typing from a real keyboard, and AltGr characters (`@`, `€`).
-- [ ] Mouse wheel scrolling, and the wheel direction with macOS natural
-      scrolling (kilim currently does not invert `SDL_MOUSEWHEEL_FLIPPED`).
-- [ ] Live drag-resize on Windows and macOS: no freezing.
-- [ ] Idle CPU close to 0 %.
-- [ ] Windows at 125-150 % display scaling: if the UI is too small, use
-      `SDL_GetWindowDisplayScale` as well as the pixel density.
-- [ ] Retina sharpness on macOS and moving the window between displays.
-
-**Fixes:**
-
-- [ ] Hit-testing uses the previous layout when several mouse events arrive in
-      one batch: lay out before hit-testing when a frame is pending.
-- [ ] Hover is only recomputed on mouse move: recompute after scroll and
-      removal.
-- [ ] Tab can focus a row scrolled out of view: scroll the focused widget into
-      view.
-- [ ] The wheel is always consumed by `Scroll`, even at its limit: pass it to
-      the parent so nested scrolling works.
-- [ ] `Textbox`: shrink `scroll_x` when text gets shorter, don't fire
-      `on_change` on programmatic `text=`, filter control characters on paste.
-- [ ] Caret stops blinking while events keep arriving: track the time of the
-      last blink.
-- [ ] A failing `SDL_WaitEvent` busy-loops: back off or exit.
-- [ ] A `Window` dropped without `run`/`close` leaves the event watch with a
-      dangling pointer: keep a module-level reference or document it.
-- [ ] Key repeat toggles a checkbox repeatedly: read `SDL_KeyboardEvent.repeat`.
-
-**Project housekeeping:**
-
-- [ ] Tag v0.1.2 so the English comments ship in a release.
-- [ ] Get listed on [packs.iyi.dev](https://packs.iyi.dev)
-      ([domify/iyipacks-website#1](https://github.com/domify/iyipacks-website/issues/1)),
-      and propose a GUI category there.
-- [ ] CI: move from the deprecated `macos-14` runner to `macos-15`, add a
-      `permissions:` block, move to Node 24 actions, pin the SDL3_ttf Windows
-      package checksum from an independent source.
-
-## v0.2: five platforms and performance groundwork
-
-- **Linux arm64 and macOS x86-64 in CI** ([#1](https://github.com/Tuntii/kilim/issues/1),
-  [#2](https://github.com/Tuntii/kilim/issues/2)). Start with a spike that
-  proves the cross-compile, link and run path for one program on each, then
-  move the whole suite over.
-- **Benchmarks in CI** on every platform. Cases:
-  - frame time for a tree of 100, 1,000 and 10,000 widgets;
-  - a 10,000-row text list;
-  - one full relayout after resize;
-  - idle wake-ups per second.
-
-  Results are kept as CI artifacts. A release is blocked by a regression
-  beyond an agreed threshold. Hosted runners are noisy, so compare medians of
-  several runs.
-
-  Started: `bench/core.iyi` and `bench/render.iyi` run in CI on every platform
-  and report to the job summary. Still to do: the idle wake-up count and the
-  regression gate. Numbers on a Windows desktop (debug build, as in CI):
-
-  | Full frame, to-do list | 100 rows | 1,000 rows | 10,000 rows |
-  |---|---:|---:|---:|
-  | kilim core (layout + draw calls), v0.1.1 | 0.08 ms | 0.8 ms | 10.5 ms |
-  | Real SDL window (text included), v0.1.1 | 19 ms | 184 ms | 1,805 ms |
-  | kilim core, with the caches below | 0.03 ms | 0.29 ms | 3.0 ms |
-  | Real SDL window, with the caches below | 0.40 ms | 0.61 ms | 3.1 ms |
-
-  In v0.1.1 nearly all of the time went to rasterising text, and every row was
-  drawn, even rows outside the scroll viewport.
-- **Done: clip culling.** Containers skip children that lie outside the clip
-  rectangle (`Canvas#visible?`).
-- **Done: text cache.** `SdlCanvas` caches string sizes and rendered string
-  textures. Still open: a glyph atlas through SDL3_ttf's text engine
-  (`TTF_CreateRendererTextEngine`), so a changed string does not need a new
-  texture.
-- **Done in part: layout cache.** Each widget caches its preferred size until
-  it or a descendant is invalidated. Still open: skipping `layout` for
-  subtrees that did not change.
-- **Partial redraw:** track dirty rectangles and repaint only what changed.
-
-## v0.3: the GPU backend
-
-- **`gpu` backend on the SDL GPU API.** Batched quads for rectangles, lines
-  and clipping, and SDL3_ttf's GPU text engine (`TTF_CreateGPUTextEngine`) for
-  glyphs.
-- **Shaders** are compiled ahead of time for SPIR-V, MSL and DXIL and
-  embedded in the library, so apps need no shader toolchain.
-- **Backend choice:** an app option and an environment variable, plus
-  automatic fallback to `renderer` with a log line that says why.
-- **Same look on both backends:** the selftests take a screenshot with each
-  backend, and CI compares the two within a small pixel tolerance on each
-  platform.
-- **Display-scale changes** when a window moves between monitors.
-
-## v0.4: text and input
-
-- Text selection with mouse drag, Shift+arrows, double-click for a word, and
-  Ctrl/Cmd+A. Copy and cut act on the selection instead of the whole text.
-- Click to place the caret.
-- IME composition (`SDL_EVENT_TEXT_EDITING`) for Chinese, Japanese, Korean and
-  other input methods.
-- A multi-line text area with line wrapping and vertical scrolling.
-- Word-wise caret movement (Ctrl/Alt+arrows), and undo/redo.
-
-## v0.5: widgets, layout and theming
-
-- More widgets: radio group, slider, progress bar, dropdown, tabs, tooltip,
-  modal dialog.
-- A list view that lays out only the visible rows, building on the v0.2
-  benchmarks.
-- An image widget. iyi's standard library has `std/png`, so it needs no new C
-  dependency.
-- Layout: cross-axis alignment (start, centre, end, stretch), min/max sizes,
-  and a grid container.
-- A theme API with a built-in dark theme. Colours and metrics move from
-  constants into a theme object. Rounded corners and shadows come with it,
-  on both backends.
-
-## v0.6: app features
-
-- Menu bar and keyboard shortcuts.
-- Multiple windows per process.
-- Native file open/save dialogs (`SDL_ShowOpenFileDialog`). These use a C
-  callback, so they need a second, carefully reviewed callback path.
-- Dropping files onto the window (`SDL_EVENT_DROP_FILE`).
-- Packaging guide for all five platforms:
-  - shipping the SDL DLLs on Windows;
-  - `.app` bundles on macOS, built for arm64 and x86-64 (or universal);
-  - AppImage or system packages on Linux, for x86-64 and arm64.
-
-## Towards 1.0
-
-- A stable, documented public API, with `iyi doc` output and an examples
-  gallery.
-- Single-import ergonomics: re-export widget types under short names once
-  iyi allows it (today `pub alias` clashes with submodule names).
-- Follow new iyi releases. kilim is pinned to 0.20.0 today, and each upgrade
-  is a deliberate, tested step. Switch Linux arm64 and macOS x86-64 to native
-  compilers once iyi ships them.
-- Accessibility: screen-reader support needs per-platform work that SDL does
-  not provide, so it needs its own design first.
-- An optional "rebuild the tree from state" layer on top of the retained
-  widgets, for apps that prefer that style.
+screenshot, and the benchmarks. iyi 0.20.0 publishes compiler binaries only for
+Windows x86-64, Linux x86-64 and macOS arm64, so the other two platforms
+compile on a supported host and link and run on the target runner.
