@@ -1,8 +1,7 @@
 // semantic-release: run by the release job in .github/workflows/ci.yml on master.
-// Commits follow Conventional Commits. For now fix, perf and feat all make a patch
-// release, breaking changes included (they are listed in the notes); other types
-// make none. A new minor version is a deliberate step: tag vX.Y.0 on master by
-// hand, and semantic-release continues from that tag.
+// Commits follow Conventional Commits. One release a month, run by hand (Run
+// workflow on CI, branch master): feat and breaking changes make the minor release
+// (pre-1.0), fix and perf alone a patch; other types make none.
 
 // `#` starts an issue reference only before a digit, so iyi method names in commit
 // bodies (`Widget#layout`) are not read as issues. A RegExp, because the parser
@@ -18,10 +17,9 @@ export default {
       {
         preset: "conventionalcommits",
         parserOpts,
-        // Matching rules win over the preset's defaults (feat: minor, breaking: major).
+        // Matching rules win over the preset's defaults (feat: minor); breaking is held to minor before 1.0.
         releaseRules: [
-          { breaking: true, release: "patch" },
-          { type: "feat", release: "patch" },
+          { breaking: true, release: "minor" },
         ],
       },
     ],
