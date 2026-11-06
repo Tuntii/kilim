@@ -3,6 +3,8 @@
 
 module kilim/timers
 
+import kilim/theme::{BLINK_MS}
+
 class Entry
   getter id : Int32
   getter interval : Int32
@@ -23,6 +25,8 @@ pub class Timers
 
   # Runs fn after interval_ms (and again every interval_ms when repeat). Returns an id for cancel.
   pub def add(interval_ms : Int32, repeat : Bool, now_ms : Int64, &fn : -> Nil) : Int32
+    # A zero interval would be due again at once: a repeating one would spin the loop.
+    interval_ms = 1 if interval_ms < 1
     id = @next_id
     @next_id += 1
     @items << Entry.new(id, interval_ms, repeat, now_ms + interval_ms, fn)
@@ -31,6 +35,7 @@ pub class Timers
 
   # Safe from inside a timer's own block, and for ids that already ran or never existed.
   pub def cancel(id : Int32) : Nil
+    # Marked dead as well as removed: a fire in progress holds a copy of the due list.
     @items.each { |e| e.live = false if e.id == id }
     @items = @items.reject { |e| e.id == id }
   end
@@ -67,4 +72,49 @@ pub class Timers
 
   @items : Array(Entry)
   @next_id : Int32
+end
+
+# What the event loop needs between events: the timers and the caret blink, which keeps
+# its own cadence. Backend-free; the windows only supply the clock and the wait call.
+pub class Pacer
+  getter timers : Timers
+
+  def initialize
+    @timers = Timers.new
+    # When the caret next blinks (clock ms); -1 while it is not armed.
+    @blink_at = -1_i64
+  end
+
+  # Milliseconds to wait for events: until the caret blinks (when a text field wants
+  # it) or the next timer, whichever is first; -1 for no limit.
+  pub def wait_ms(now_ms : Int64, text : Bool) : Int32
+    wait = -1
+    if text
+      @blink_at = now_ms + BLINK_MS if @blink_at < 0_i64
+      wait = (@blink_at > now_ms ? @blink_at - now_ms : 0_i64).to_i
+    else
+      @blink_at = -1_i64
+    end
+    if t = @timers.next_in(now_ms)
+      wait = t if wait < 0 || t < wait
+    end
+    wait
+  end
+
+  # After a wait: idle is true when it ended by timeout (no input). Returns true when
+  # the caret should blink; a timer wake alone does not, and input restarts the deadline.
+  pub def blink?(now_ms : Int64, text : Bool, idle : Bool) : Bool
+    if !idle
+      @blink_at = -1_i64
+      false
+    elsif text && @blink_at >= 0_i64 && now_ms >= @blink_at
+      @blink_at = now_ms + BLINK_MS
+      true
+    else
+      false
+    end
+  end
+
+  @timers : Timers
+  @blink_at : Int64
 end
