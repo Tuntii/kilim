@@ -299,6 +299,19 @@ def main : Int32
   key(f.ui, Key::Enter)
   expect_eq f.log.oks, 1, "Enter confirms"
 
+  # app code (a timer, the inbox) cannot move focus behind the modal
+  f = Fixture.new
+  d = f.confirm
+  f.ui.focus(f.text)
+  expect f.ui.focused == button(d, "Delete"), "focus outside the modal is ignored"
+  if c = button(d, "Cancel")
+    f.ui.focus(c)
+    expect f.ui.focused == c, "focus inside the modal still works"
+  end
+  key(f.ui, Key::Escape)
+  f.ui.focus(f.text)
+  expect f.ui.focused == f.text, "after close, focus goes anywhere again"
+
   # a long message is cut to fit
   f = Fixture.new
   confirm(f.ui, "T", "x" * 100, "OK") { }

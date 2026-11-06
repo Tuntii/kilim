@@ -182,6 +182,8 @@ pub class Ui < Context
 
   pub def focus(w : Widget?) : Nil
     w = nil if w && !w.focusable?
+    # The modal owns input: app code (a timer, the inbox) cannot focus a widget behind it.
+    return if w && @modal && !in_modal?(w)
     return if w == @focused
     if o = @focused
       o.focused = false
