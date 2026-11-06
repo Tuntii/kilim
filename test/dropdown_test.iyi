@@ -149,6 +149,26 @@ def main : Int32
   press(ui, row.x + 5, row.y + 5)
   expect log.picks.empty?, "a click where the popup was picks no option"
 
+  # Tab to another widget closes the popup; Tab that lands on the owner again keeps it
+  log = Log.new
+  d = Dropdown.new(["a", "b"], 0, ->(i : Int32) { log.picks << i; nil })
+  next_btn = Button.new("next")
+  ui = Ui.new(Box.new(Axis::Column, [d, next_btn] of Widget), RecordCanvas.new, MemoryClipboard.new)
+  ui.resize(300_f32, 200_f32)
+  ui.frame
+  ui.focus(d)
+  key(ui, Key::Space)
+  expect !ui.overlay.nil?, "open before Tab"
+  key(ui, Key::Tab)
+  expect ui.focused == next_btn, "Tab moved focus"
+  expect ui.overlay.nil?, "Tab closes the popup"
+  expect log.picks.empty?, "Tab picks nothing"
+  col, d, ui = setup(log)
+  ui.focus(d)
+  key(ui, Key::Space)
+  key(ui, Key::Tab)
+  expect !ui.overlay.nil?, "Tab back onto the owner keeps the popup"
+
   # near the bottom of the window the popup flips above
   log = Log.new
   d = Dropdown.new(["a", "b", "c"], 0)
