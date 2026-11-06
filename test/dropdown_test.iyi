@@ -209,6 +209,10 @@ def main : Int32
   col, d, ui = setup(log)
   click(ui, d)
   expect !ui.overlay.nil?, "open before resize"
+  # WM_PAINT, SDL EXPOSED and screenshots call resize with the same size.
+  ui.resize(300_f32, 200_f32)
+  expect !ui.overlay.nil?, "a resize to the same size keeps the popup"
+  expect ui.needs_frame?, "a same-size resize still redraws"
   ui.resize(200_f32, 200_f32)
   expect ui.overlay.nil?, "Ui#resize hides the overlay"
   click(ui, d)

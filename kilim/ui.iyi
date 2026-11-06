@@ -39,10 +39,10 @@ pub class Ui < Context
   end
 
   pub def resize(w : Float32, h : Float32) : Nil
+    # The popup is anchored to a rect that a new size moves; repaints at the same size keep it.
+    hide_overlay if w != @w || h != @h
     @w = w
     @h = h
-    # The popup is anchored to a rect that the new layout moves.
-    hide_overlay
     @root.needs_frame = true
   end
 
