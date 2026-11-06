@@ -75,7 +75,7 @@ list with a textbox, buttons, checkboxes, scrolling and Turkish text.
 | `dropdown(options, selected:, on_change:, sizing:)` | Shows the chosen option; a click, Space or Enter opens the list as an overlay. Up and Down change the choice, Enter or a click picks, Escape or a click outside closes (that click does not reach the widget under it). |
 | `confirm(ui, title, message, ok_text, &on_ok)` | A modal confirmation: centred over a dimmed window, Cancel / `ok_text`. OK has the focus, so Enter confirms (Enter on a focused Cancel cancels); Escape cancels. Input behind it is ignored, Tab stays inside, window shortcuts do not fire, and focus goes back to the previous widget on close. The block runs after the dialog closes. Underneath: `Context#show_modal(widget)` / `#close_modal`; a dropdown inside a modal opens above it. |
 | `scroll(child, sizing:)` | A vertically scrolling viewport with a scrollbar. |
-| `list_view(on_select:, sizing:)` | A selectable list; set `rows =` to `ListRow`s (title, optional detail line, header rows). Up, Down, PageUp and PageDown move the selection; long text ends in an ellipsis. |
+| `list_view(on_select:, sizing:)` | A selectable list; set `rows =` to `ListRow`s (title, optional detail line, header rows). Up, Down, PageUp and PageDown move the selection; long text ends in an ellipsis. Put it inside `scroll(...)`: on its own it neither scrolls nor keeps the selection in view. `rows =` keeps the selection on the row with the same `key`, so read `selected` after it. |
 
 **Sizing.** Each child of a `row` or `column` sizes itself along that box's
 direction:
@@ -125,7 +125,8 @@ selection (nothing is copied when it is empty), Ctrl/Cmd+X cuts it and
 Ctrl/Cmd+V pastes over it. `window.shortcut(Key::N) { ... }`
 runs a block on Ctrl/Cmd+N before the focused widget sees the key; with
 `primary: false` (a plain key such as Delete) it applies only while no text field
-is focused.
+is focused. `Key` is `Kilim::Event::Key`; for the short name, import
+`github.com/tuntii/kilim/kilim/event::{Key}`.
 
 ## Installation
 
@@ -235,7 +236,8 @@ CI runs without a visible display, so check these by hand on a real screen:
 - Scrolling with the mouse wheel, and the scroll direction on macOS with
   natural scrolling.
 - Resizing the window by dragging: the layout should follow without freezing.
-- CPU use while idle should be close to 0 %.
+- CPU use while idle should be close to 0 % (Linux with an inbox: about 100
+  wakeups/s).
 - On Windows at 125-150 % display scaling, the UI should have the same
   physical size as other apps, also after moving the window to a monitor with
   a different scale. (With `-Dsdl`, SDL may report a pixel density of 1 and put
