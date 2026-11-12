@@ -315,6 +315,6 @@ work of April, and everything after it moves up a month.
 | macOS x86-64 | `macos-15-intel` | cross-compiled from arm64, linked on the runner ([#2](https://github.com/Tuntii/kilim/issues/2)) | SDL; AppKit from March 2027 |
 
 Each cell runs `iyi test`, the smoke test, the to-do selftest with a
-screenshot, and the benchmarks. iyi 0.20.0 publishes compiler binaries only for
+screenshot, and the benchmarks. iyi 0.21.0 publishes compiler binaries only for
 Windows x86-64, Linux x86-64 and macOS arm64, so the other two platforms
 compile on a supported host and link and run on the target runner.

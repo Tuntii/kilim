@@ -15,8 +15,8 @@ def main : Int32
   gone = Mutex.new { false }
   box = Inbox(Int32).new(SharedProc(Nil, Nil).of { |_x| wakes.add(1); nil }, gone)
   group do |g|
-    g.spawn_parallel { N.times { |i| box.send(i) }; nil }
-    g.spawn_parallel { N.times { |i| box.send(1000 + i) }; nil }
+    g.spawn(unit: :new) { N.times { |i| box.send(i) }; nil }
+    g.spawn(unit: :new) { N.times { |i| box.send(1000 + i) }; nil }
   end
   got = box.take
   expect_eq got.size, 2 * N, "values received"

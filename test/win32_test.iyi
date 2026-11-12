@@ -1,5 +1,6 @@
 # UTF-16 and lParam helpers of the Windows backend; pure functions, run on every platform.
 
+@[Unsafe("hands UTF-16 buffers to Win32 as raw pointers")]
 module test/win32_test
 
 import kilim/win32::{wide, from_wide, lo16, hi16}

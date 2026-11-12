@@ -8,6 +8,7 @@
 # hands values sent from other threads to the UI thread (Inbox), ending the run loop
 # with a WM_CLOSE sent that way. Prints `smoke ok` and exits 0, or the reason and 1.
 
+@[Unsafe("posts window messages through the Win32 API")]
 module examples/smoke_win32
 
 import std/float
@@ -256,7 +257,7 @@ def main : Int32
   # Inbox: a value sent from another thread reaches its handler on the UI thread.
   results = win.inbox(String) { |s| title.text = s; nil }
   group do |g|
-    g.spawn_parallel { sleep(20); results.send("done"); nil }
+    g.spawn(unit: :new) { sleep(20); results.send("done"); nil }
     t0 = LibWin.GetTickCount64
     while title.text != "done" && LibWin.GetTickCount64 - t0 < 2000_u64
       win.step
@@ -280,7 +281,7 @@ def main : Int32
   t0 = LibWin.GetTickCount64
   closer = win.inbox(String) { |_s| took = (LibWin.GetTickCount64 - t0).to_i64; post(win, WM_CLOSE, 0_u64, 0_i64); nil }
   group do |g|
-    g.spawn_parallel { sleep(60); closer.send("close"); nil }
+    g.spawn(unit: :new) { sleep(60); closer.send("close"); nil }
     win.run
   end
   fail("the timer did not wake the loop") unless ticked

@@ -1,6 +1,7 @@
 # Native Windows window and event loop. Win32 messages become kilim events and go
 # to Ui; if Ui needs a frame, D2dCanvas draws and presents it.
 
+@[Unsafe("drives a Win32 window and its message loop")]
 module kilim/win_window
 
 import std/float
@@ -134,7 +135,7 @@ pub class WinWindow
   end
 
   # An inbox other threads send T values to; each wakes the loop, which hands it to the
-  # handler here on the UI thread. Pattern: a spawn_parallel block may capture only
+  # handler here on the UI thread. Pattern: a `spawn(unit: :new)` block may capture only
   # Share values, so it cannot touch this window or its widgets; it captures the
   # (Share) inbox, and the handler, which never leaves this thread, may.
   pub def inbox(type : T.class, &handler : T -> Nil) : Inbox(T) forall T

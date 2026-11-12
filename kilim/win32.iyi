@@ -3,12 +3,13 @@
 # are called through the object's vtable with `com` (slot numbers are the
 # method's position in the interface, inherited methods first).
 
+@[Unsafe("binds the Win32, Direct2D and DirectWrite C and COM APIs")]
 module kilim/win32
 
 import std/int
 import std/static_array
 
-# shortcut: iyi 0.20.0 does not accept `pub` on a `lib`; `::` puts it at the top level
+# shortcut: iyi 0.21.0 still does not accept `pub` on a `lib`; `::` puts it at the top level
 # for files that `import kilim/win32` (same as kilim/sdl).
 @[Link("user32")]
 @[Link("gdi32")]

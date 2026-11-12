@@ -5,6 +5,7 @@
 # `smoke ok` and exits 0; otherwise it prints the reason and exits 1.
 # On Windows build it with -Dsdl (the native backend has examples/smoke_win32.iyi).
 
+@[Unsafe("pushes SDL events through the C API")]
 module examples/smoke
 
 import std/float
@@ -131,7 +132,7 @@ def main : Int32
   # Inbox: a value sent from another thread reaches its handler on the UI thread.
   results = win.inbox(String) { |s| title.text = s; nil }
   group do |g|
-    g.spawn_parallel { sleep(20); results.send("done"); nil }
+    g.spawn(unit: :new) { sleep(20); results.send("done"); nil }
     t0 = LibSDL3.SDL_GetTicks
     while title.text != "done" && LibSDL3.SDL_GetTicks - t0 < 2000_u64
       win.step
@@ -152,7 +153,7 @@ def main : Int32
   t0 = LibSDL3.SDL_GetTicks
   closer = win.inbox(String) { |_s| took = (LibSDL3.SDL_GetTicks - t0).to_i64; push_quit; nil }
   group do |g|
-    g.spawn_parallel { sleep(60); closer.send("close"); nil }
+    g.spawn(unit: :new) { sleep(60); closer.send("close"); nil }
     win.run
   end
   fail("the timer did not wake the loop") unless ticked

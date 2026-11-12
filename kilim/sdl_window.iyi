@@ -1,6 +1,7 @@
 # SDL window and event loop. Translates SDL events into kilim events and
 # hands them to Ui; if Ui drew, presents to the screen.
 
+@[Unsafe("drives the SDL window and event loop through its C API")]
 module kilim/sdl_window
 
 import std/float

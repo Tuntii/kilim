@@ -2,7 +2,7 @@
 
 From nothing to a window with a working button, in four steps.
 
-1. Install [iyi 0.20.0](../README.md#iyi-0200), and on Linux and macOS
+1. Install [iyi 0.21.0](../README.md#iyi-0210), and on Linux and macOS
    [SDL3 + SDL3_ttf](../README.md#sdl3-and-sdl3_ttf). Windows needs nothing
    else.
 2. Add kilim to your `iyi.mod`:
