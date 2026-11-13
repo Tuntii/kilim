@@ -1,7 +1,7 @@
 # Values handed to the UI thread from other threads. A worker sends; the window, on
 # its next loop pass, gives each value to the handler the inbox was made with. The
 # handler stays with the window (it touches widgets, so it is not Share), and this
-# object holds only Share state, so a spawn_parallel block may capture it.
+# object holds only Share state, so a `spawn(unit: :new)` block may capture it.
 
 module kilim/inbox
 

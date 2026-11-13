@@ -11,7 +11,7 @@
 <p align="center">
   <a href="https://github.com/Tuntii/kilim/actions/workflows/ci.yml"><img src="https://github.com/Tuntii/kilim/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Tuntii/kilim" alt="License: Apache-2.0"></a>
-  <img src="https://img.shields.io/badge/iyi-0.20.0-blue" alt="iyi 0.20.0">
+  <img src="https://img.shields.io/badge/iyi-0.21.0-blue" alt="iyi 0.21.0">
   <img src="https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey" alt="Platforms: Windows, Linux, macOS">
 </p>
 
@@ -130,21 +130,21 @@ is focused. `Key` is `Kilim::Event::Key`; for the short name, import
 
 ## Installation
 
-### iyi 0.20.0
+### iyi 0.21.0
 
-kilim is pinned to iyi **0.20.0**. The official installers pin the version
+kilim is pinned to iyi **0.21.0**. The official installers pin the version
 with the `IYI_VERSION` environment variable (without it they install the
 latest release). Fetch the installer from the same tag:
 
 ```powershell
 # Windows (needs the Visual C++ build tools: "Desktop development with C++")
-$env:IYI_VERSION = '0.20.0'
-irm https://raw.githubusercontent.com/iyilang/iyi/v0.20.0/install.ps1 | iex
+$env:IYI_VERSION = '0.21.0'
+irm https://raw.githubusercontent.com/iyilang/iyi/v0.21.0/install.ps1 | iex
 ```
 
 ```sh
 # Linux / macOS (needs cc)
-curl -fsSL https://raw.githubusercontent.com/iyilang/iyi/v0.20.0/install.sh | IYI_VERSION=0.20.0 sh
+curl -fsSL https://raw.githubusercontent.com/iyilang/iyi/v0.21.0/install.sh | IYI_VERSION=0.21.0 sh
 ```
 
 ### SDL3 and SDL3_ttf

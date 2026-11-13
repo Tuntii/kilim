@@ -3,6 +3,7 @@
 # scales to pixels itself; DirectWrite lays text out in DIPs too, so sizes do not
 # change with the display scale and need no re-measure.
 
+@[Unsafe("holds Direct2D and DirectWrite COM objects as raw pointers")]
 module kilim/d2d_canvas
 
 import std/float

@@ -2,6 +2,7 @@
 # units; here they are converted to pixels with `density`, and text is also
 # rasterized at that density (sharp on Retina).
 
+@[Unsafe("draws through SDL renderer and font handles held as raw pointers")]
 module kilim/sdl_canvas
 
 import std/float
