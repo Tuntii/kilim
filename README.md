@@ -58,6 +58,16 @@ list with a textbox, buttons, checkboxes, scrolling and Turkish text.
   <img src="assets/readme/todo.png" alt="The to-do example with a ticked task, Turkish text and a scrollbar" width="480">
 </p>
 
+## Built with kilim
+
+- **[loser](https://github.com/Tuntii/loser)**: a personal task tracker that
+  keeps tasks as Markdown files, syncs GitHub issues and pull requests, and
+  lets Claude Code read and update them over MCP. It uses list views, text
+  areas, dropdowns, modals, shortcuts, timers and the window inbox for
+  background work.
+
+Built something with kilim? Open a pull request to add it here.
+
 ## Widgets
 
 `import github.com/tuntii/kilim` gives you these builders under `Kilim`:
