@@ -17,9 +17,6 @@ import kilim/theme::*
 import std/mutex::{Mutex}
 import std/shared_proc::{SharedProc}
 
-# How often run checks the inboxes on Linux, where a send cannot wake it (SdlWindow#inbox).
-INBOX_POLL_MS = 10
-
 # primary: Cmd on macOS, Ctrl elsewhere. Ctrl+Alt together means AltGr
 # (that's how it arrives on Windows; Polish AltGr+C = ć, Hungarian AltGr+V = @): not a shortcut.
 {% if flag?(:darwin) %}
@@ -84,9 +81,6 @@ pub class SdlWindow
     present
     until @quit
       wait = @pacer.wait_ms(clock_ms, @ui.wants_text_input?)
-      {% if flag?(:linux) %}
-        wait = INBOX_POLL_MS if !@inboxes.empty? && (wait < 0 || wait > INBOX_POLL_MS)
-      {% end %}
       got = wait < 0 ? LibSDL3.SDL_WaitEvent(pointerof(@event)) : LibSDL3.SDL_WaitEventTimeout(pointerof(@event), wait)
       handle_event if got
       now = clock_ms
@@ -131,17 +125,10 @@ pub class SdlWindow
 
   # What an inbox calls on the sender's thread after queueing a value.
   def wake : SharedProc(Nil, Nil)
-    {% if flag?(:linux) %}
-      # shortcut: iyi starts its Linux worker threads with a raw clone, without glibc's
-      # thread setup, so a sender must not call C (SDL_PushEvent's X11 wake crashed
-      # there); run polls the inboxes every INBOX_POLL_MS instead. Upgrade when iyi
-      # workers can call C on Linux, or a wake made only of syscalls is possible.
-      SharedProc(Nil, Nil).of { |_x| nil }
-    {% else %}
-      # SDL_PushEvent is thread-safe.
-      t = @wake_type
-      SharedProc(Nil, Nil).of { |_x| e = LibSDL3::Event.new; e.type = t; LibSDL3.SDL_PushEvent(pointerof(e)); nil }
-    {% end %}
+    # SDL_PushEvent is thread-safe. On Linux this needs iyi 0.21.0, whose worker
+    # threads are made by libc and may call C (iyi #158).
+    t = @wake_type
+    SharedProc(Nil, Nil).of { |_x| e = LibSDL3::Event.new; e.type = t; LibSDL3.SDL_PushEvent(pointerof(e)); nil }
   end
 
   # Hands values sent since the last pass to their handlers.
