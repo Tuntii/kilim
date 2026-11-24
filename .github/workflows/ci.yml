@@ -5,6 +5,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Read-only token by default; the release job asks for what it writes.
+permissions:
+  contents: read
+
 env:
   IYI_VERSION: 0.21.0
   SDL_RENDER_DRIVER: software
@@ -28,7 +32,7 @@ jobs:
             sdl: ""
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # --- iyi 0.21.0 (installer from the same tag, pinned by IYI_VERSION) ---
       - name: Install iyi (Windows)
@@ -47,12 +51,8 @@ jobs:
       - name: Test
         run: iyi test
 
-      # --- SDL3 + SDL3_ttf ---
-      - name: MSVC dev shell
-        if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1
-
       # --- native Windows backend (Win32 + Direct2D + DirectWrite): needs no SDL ---
+      # iyi finds MSVC and the Windows SDK through the registry: no developer shell step.
       - name: Native smoke (Windows)
         if: runner.os == 'Windows'
         run: iyi run examples/smoke_win32.iyi
@@ -69,6 +69,7 @@ jobs:
           iyi run bench/render.iyi | tee -a bench_win32.md
           cat bench_win32.md >> "$GITHUB_STEP_SUMMARY"
 
+      # --- SDL3 + SDL3_ttf ---
       - name: SDL (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -83,7 +84,7 @@ jobs:
             libgl-dev libegl-dev
       - name: Cache SDL (Linux)
         if: runner.os == 'Linux'
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: vendor/linux
           key: sdl-linux-${{ hashFiles('scripts/sdl-versions.txt', 'scripts/build-sdl-linux.sh') }}
@@ -141,7 +142,7 @@ jobs:
 
       - name: Upload benchmark results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: bench-${{ matrix.os }}
           path: |
@@ -151,7 +152,7 @@ jobs:
 
       - name: Upload screenshots
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: screenshots-${{ matrix.os }}
           path: |
@@ -174,10 +175,10 @@ jobs:
       issues: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
       - name: semantic-release
