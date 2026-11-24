@@ -6,7 +6,7 @@
 @[Unsafe("binds the SDL3 and SDL3_ttf C libraries")]
 module kilim/sdl
 
-# shortcut: iyi 0.21.0 still does not accept `pub` on a `lib`, and a `lib` inside a module
+# shortcut: iyi 0.22.0 still does not accept `pub` on a `lib`, and a `lib` inside a module
 # stays private to that module; `::` puts it at the top level, but still only
 # files that write `import kilim/sdl` see it. Switch to `pub lib` once iyi accepts it.
 @[Link("SDL3")]

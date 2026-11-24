@@ -9,7 +9,7 @@ module kilim/win32
 import std/int
 import std/static_array
 
-# shortcut: iyi 0.21.0 still does not accept `pub` on a `lib`; `::` puts it at the top level
+# shortcut: iyi 0.22.0 still does not accept `pub` on a `lib`; `::` puts it at the top level
 # for files that `import kilim/win32` (same as kilim/sdl).
 @[Link("user32")]
 @[Link("gdi32")]
