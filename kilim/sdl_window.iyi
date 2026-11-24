@@ -251,11 +251,13 @@ pub class SdlWindow
     when LibSDL3::EVENT_KEY_DOWN
       k = ev.as(LibSDL3::KeyboardEvent*).value
       mods = Mods.new(shift: k.mod & LibSDL3::KMOD_SHIFT != 0, primary: primary_down?(k.mod))
-      @ui.dispatch KeyDown.new(key(k.key), mods)
+      @pacer.restart_blink(clock_ms)
+      @ui.dispatch KeyDown.new(key(k.key), mods, k.repeat)
     when LibSDL3::EVENT_TEXT_INPUT
       # Some platforms also send TEXT_INPUT for Ctrl/Cmd+C/V; that is a shortcut,
       # not text (with AltGr, primary_down? is false and the text passes).
       return if primary_down?(LibSDL3.SDL_GetModState)
+      @pacer.restart_blink(clock_ms)
       @ui.dispatch TextInput.new(c_string(ev.as(LibSDL3::TextInputEvent*).value.text))
     end
   end

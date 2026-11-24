@@ -134,6 +134,7 @@ pub class Textbox < Widget
       when Key::End
         @edit.end_(e.mods.shift)
       when Key::Enter
+        return true if e.repeat
         if f = @on_submit
           f.call(@edit.text)
         end

@@ -113,11 +113,30 @@ def main : Int32
   expect_eq blinks, 2, "two blinks in two intervals, not one per timer wake"
   expect c.n >= 10, "the timer kept running (#{c.n})"
 
-  # Input restarts the blink deadline.
+  # Typing restarts the blink deadline.
   p = Pacer.new
   p.wait_ms(0_i64, true)
-  expect !p.blink?(BLINK_MS.to_i64 - 10, true, false), "input wake does not blink"
-  expect_eq p.wait_ms(BLINK_MS.to_i64 - 10, true), BLINK_MS, "deadline restarted by input"
+  p.restart_blink(BLINK_MS.to_i64 - 10)
+  expect !p.blink?(BLINK_MS.to_i64, true, false), "no blink right after a key"
+  expect_eq p.wait_ms(BLINK_MS.to_i64 - 10, true), BLINK_MS, "deadline restarted by typing"
+
+  # Other input (a mouse drag: a wake every 16 ms) does not freeze the caret.
+  p = Pacer.new
+  p.wait_ms(0_i64, true)
+  blinks = 0
+  now = 0_i64
+  # Each blink lands on the next 16 ms wake, so two of them need up to 2 * 16 ms more.
+  while now < BLINK_MS.to_i64 * 2 + 32
+    now += 16
+    p.wait_ms(now, true)
+    blinks += 1 if p.blink?(now, true, false)
+  end
+  expect_eq blinks, 2, "the caret keeps blinking while events arrive"
+
+  # Not armed (no text field): restart_blink does not arm it.
+  p = Pacer.new
+  p.restart_blink(0_i64)
+  expect !p.blink?(BLINK_MS.to_i64, true, true), "restart_blink alone does not start the blink"
 
   puts "timers ok"
   0

@@ -45,12 +45,13 @@ def push_button(type : UInt32, x : Float32, y : Float32) : Nil
   push(e)
 end
 
-def push_key(key : UInt32) : Nil
+def push_key(key : UInt32, repeat : Bool = false) : Nil
   e = LibSDL3::Event.new
   k = LibSDL3::KeyboardEvent.new
   k.type = LibSDL3::EVENT_KEY_DOWN
   k.key = key
   k.down = true
+  k.repeat = repeat
   pointerof(e).as(LibSDL3::KeyboardEvent*).value = k
   push(e)
 end
@@ -88,6 +89,10 @@ def main : Int32
   push_key(LibSDL3::KEY_RETURN)
   win.step
   fail("counter after SDL click + Enter is #{n.n}, expected 3") unless n.n == 3
+  # A held key: SDL marks the auto-repeat, which must not click again.
+  push_key(LibSDL3::KEY_RETURN, true)
+  win.step
+  fail("a repeated Enter clicked (counter #{n.n}, expected 3)") unless n.n == 3
 
   # Text area: typed text and Enter give two lines; Tab then wraps back to the button,
   # so the caret blink does not keep waking the loop later.

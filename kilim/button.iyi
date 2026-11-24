@@ -45,7 +45,7 @@ pub class Button < Widget
       true
     when KeyDown
       return false unless e.key.space? || e.key.enter?
-      click
+      click unless e.repeat
       true
     else
       false

@@ -108,8 +108,11 @@ end
 pub class KeyDown < Event
   getter key : Key
   getter mods : Mods
+  # The key is held and the system repeats it. Typing and caret keys act on every
+  # repeat; one-shot actions (toggle, click, open, submit) only on the first press.
+  getter repeat : Bool
 
-  def initialize(@key : Key, @mods : Mods)
+  def initialize(@key : Key, @mods : Mods, @repeat : Bool = false)
   end
 end
 

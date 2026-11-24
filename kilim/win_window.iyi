@@ -230,7 +230,9 @@ pub class WinWindow
       return 0_i64
     when WM_KEYDOWN, WM_SYSKEYDOWN
       shift = LibWin.GetKeyState(VK_SHIFT) < 0
-      @ui.dispatch KeyDown.new(key(wp), Mods.new(shift: shift, primary: primary_down?))
+      @pacer.restart_blink(clock_ms)
+      # lParam bit 30: the key was already down, so this is an auto-repeat.
+      @ui.dispatch KeyDown.new(key(wp), Mods.new(shift: shift, primary: primary_down?), (lp >> 30) & 1 != 0)
       # Alt+F4 and Alt+Space are the system's.
       return 0_i64 if msg == WM_KEYDOWN
     when WM_CHAR
@@ -259,6 +261,8 @@ pub class WinWindow
     return if u < 0x20_u16 || u == 0x7F_u16
     return unless @ui.wants_text_input?
     return if primary_down?
+    # IME commits arrive here without a WM_KEYDOWN of their own.
+    @pacer.restart_blink(clock_ms)
     @ui.dispatch TextInput.new(from_wide(pointerof(pair).as(UInt16*), 2))
   end
 
