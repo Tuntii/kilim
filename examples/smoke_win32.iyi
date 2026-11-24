@@ -124,6 +124,21 @@ def main : Int32
   win.step
   fail("typed text is #{input.text.inspect}, expected \"ş😀A\"") unless input.text == "ş😀A"
 
+  # A real double-click (CS_DBLCLKS: the second press is WM_LBUTTONDBLCLK) past the end
+  # of the text selects its last word; typed text replaces it.
+  input.text = "çift tıklama"
+  win.step
+  dx = input.bounds.x + input.bounds.w - 10
+  dy = input.bounds.y + input.bounds.h / 2
+  post(win, WM_LBUTTONDOWN, 1_u64, at(win, dx, dy))
+  post(win, WM_LBUTTONUP, 0_u64, at(win, dx, dy))
+  post(win, WM_LBUTTONDBLCLK, 1_u64, at(win, dx, dy))
+  post(win, WM_LBUTTONUP, 0_u64, at(win, dx, dy))
+  post(win, WM_CHAR, 0x78_u64, 1_i64)
+  win.step
+  fail("after a double-click and x the text is #{input.text.inspect}, expected \"çift x\"") unless input.text == "çift x"
+  puts "double-click: ok"
+
   # The IME's composition window follows the caret (client pixels).
   himc = LibImm.ImmGetContext(win.handle)
   if himc.address != 0

@@ -61,8 +61,10 @@ end
 pub struct Mods
   getter shift : Bool
   getter primary : Bool
+  # The platform's word-wise modifier for arrows: Ctrl on Windows and Linux, Option on macOS.
+  getter word : Bool
 
-  def initialize(@shift : Bool = false, @primary : Bool = false)
+  def initialize(@shift : Bool = false, @primary : Bool = false, @word : Bool = false)
   end
 end
 
@@ -81,8 +83,10 @@ pub class MouseDown < Event
   getter x : Float32
   getter y : Float32
   getter button : MouseButton
+  # 1 for a click, 2 for the second click of a double-click (3 and up where the system counts them).
+  getter clicks : Int32
 
-  def initialize(@x : Float32, @y : Float32, @button : MouseButton)
+  def initialize(@x : Float32, @y : Float32, @button : MouseButton, @clicks : Int32 = 1)
   end
 end
 

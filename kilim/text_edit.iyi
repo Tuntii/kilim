@@ -127,6 +127,75 @@ pub class TextEdit
     move_to(@chars.size, grow)
   end
 
+  # To the start of the word before the cursor (spaces and punctuation in between are skipped).
+  pub def word_left(grow : Bool = false) : Nil
+    i = @cursor
+    while i > 0 && !word_char?(@chars[i - 1])
+      i -= 1
+    end
+    while i > 0 && word_char?(@chars[i - 1])
+      i -= 1
+    end
+    move_to(i, grow)
+  end
+
+  # To the end of the word after the cursor.
+  pub def word_right(grow : Bool = false) : Nil
+    i = @cursor
+    n = @chars.size
+    while i < n && !word_char?(@chars[i])
+      i += 1
+    end
+    while i < n && word_char?(@chars[i])
+      i += 1
+    end
+    move_to(i, grow)
+  end
+
+  # Selects the run around index i whose characters are all of one kind: a word, spaces,
+  # one line break, or other characters (a double-click). Past the end: the last run.
+  pub def select_word(i : Int32) : Nil
+    n = @chars.size
+    return move_to(0, false) if n == 0
+    i = n - 1 if i >= n
+    i = 0 if i < 0
+    kind = char_kind(@chars[i])
+    a = i
+    b = i + 1
+    # A line break is a run of its own: a double-click on an empty line selects only it.
+    unless kind == 2
+      while a > 0 && char_kind(@chars[a - 1]) == kind
+        a -= 1
+      end
+      while b < n && char_kind(@chars[b]) == kind
+        b += 1
+      end
+    end
+    @anchor = a
+    @cursor = b
+  end
+
+  # 0 word, 1 space, 2 line break, 3 other.
+  def char_kind(ch : Char) : Int32
+    return 2 if ch == '\n'
+    return 1 if ch.whitespace?
+    word_char?(ch) ? 0 : 3
+  end
+
+  # shortcut: iyi's Char#letter? and #alphanumeric? know only ASCII, so every non-ASCII
+  # character outside the common punctuation blocks counts as a word character (Turkish,
+  # accented and other letters work; rarer symbols do too). Use a real Unicode letter test once iyi has one.
+  def word_char?(ch : Char) : Bool
+    return true if ch.alphanumeric? || ch == '_'
+    o = ch.ord
+    return false if o < 0x80
+    return false if ch.whitespace?
+    # Latin-1 punctuation and symbols, General Punctuation, CJK punctuation.
+    return false if (o >= 0xa0 && o <= 0xbf) || o == 0xd7 || o == 0xf7
+    return false if (o >= 0x2000 && o <= 0x206f) || (o >= 0x3000 && o <= 0x303f)
+    true
+  end
+
   # The index in [from, upto] whose x, measured from the character at from, is nearest x
   # (binary search over prefix widths).
   pub def index_near(c : Canvas, from : Int32, upto : Int32, x : Float32) : Int32

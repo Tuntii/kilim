@@ -33,12 +33,13 @@ def push(e : LibSDL3::Event) : Nil
   fail("SDL_PushEvent") unless LibSDL3.SDL_PushEvent(pointerof(e))
 end
 
-def push_button(type : UInt32, x : Float32, y : Float32) : Nil
+def push_button(type : UInt32, x : Float32, y : Float32, clicks : UInt8 = 1_u8) : Nil
   e = LibSDL3::Event.new
   b = LibSDL3::MouseButtonEvent.new
   b.type = type
   b.button = LibSDL3::BUTTON_LEFT
   b.down = type == LibSDL3::EVENT_MOUSE_BUTTON_DOWN
+  b.clicks = clicks
   b.x = x
   b.y = y
   pointerof(e).as(LibSDL3::MouseButtonEvent*).value = b
@@ -99,6 +100,18 @@ def main : Int32
   win.inject TextInput.new("şöğüt")
   win.step
   fail("text area holds #{notes.text.inspect}, expected \"Çalış\nşöğüt\"") unless notes.text == "Çalış\nşöğüt"
+  # A real double-click (SDL counts the clicks) past the end of line 0 selects its last
+  # word; typed text replaces it. The text area's padding is 8, so y + 12 is on line 0.
+  dx = notes.bounds.x + notes.bounds.w - 20
+  dy = notes.bounds.y + 12
+  push_button(LibSDL3::EVENT_MOUSE_BUTTON_DOWN, dx, dy)
+  push_button(LibSDL3::EVENT_MOUSE_BUTTON_UP, dx, dy)
+  push_button(LibSDL3::EVENT_MOUSE_BUTTON_DOWN, dx, dy, 2_u8)
+  push_button(LibSDL3::EVENT_MOUSE_BUTTON_UP, dx, dy, 2_u8)
+  win.step
+  win.inject TextInput.new("x")
+  fail("after a double-click and x the text area holds #{notes.text.inspect}") unless notes.text == "x\nşöğüt"
+  puts "double-click: ok"
   win.inject KeyDown.new(Key::Tab, Mods.new)
   fail("Tab did not move focus back to the button") unless button.focused
   puts "text area: ok"

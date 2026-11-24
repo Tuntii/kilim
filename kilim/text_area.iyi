@@ -217,7 +217,11 @@ pub class TextArea < Widget
     case e
     when MouseDown
       return false unless e.button.left?
-      click(e.x, e.y, false, c)
+      if e.clicks >= 2
+        double_click(e.x, e.y, c)
+      else
+        click(e.x, e.y, false, c)
+      end
       true
     when MouseMove
       click(e.x, e.y, true, c)
@@ -267,12 +271,12 @@ pub class TextArea < Widget
         horizontal
         return true
       when Key::Left
-        @edit.left(shift)
+        e.mods.word ? @edit.word_left(shift) : @edit.left(shift)
         @upstream = false
         horizontal
         return true
       when Key::Right
-        @edit.right(shift)
+        e.mods.word ? @edit.word_right(shift) : @edit.right(shift)
         @upstream = false
         horizontal
         return true
@@ -306,15 +310,35 @@ pub class TextArea < Widget
   end
 
   # Mouse down (grow = false) or drag: the caret goes to the nearest index on the line under y.
-  def click(x : Float32, y : Float32, grow : Bool, c : Canvas) : Nil
+  # The visual line under y, clamped to the text.
+  def line_at(y : Float32) : Int32
     k = ((y - line_y(0)) / @lh).floor.to_i
     k = 0 if k < 0
     k = @lines.size - 1 if k > @lines.size - 1
+    k
+  end
+
+  def click(x : Float32, y : Float32, grow : Bool, c : Canvas) : Nil
+    k = line_at(y)
     old = @edit.cursor
     was = @upstream
     place_at_x(k, x - @bounds.x - PADDING, grow, c)
     # A drag fires on every pointer move; repaint only when the caret moved.
     return if grow && @edit.cursor == old && @upstream == was
+    horizontal
+  end
+
+  # Selects the word (or run of spaces, or punctuation) under the pointer.
+  def double_click(x : Float32, y : Float32, c : Canvas) : Nil
+    k = line_at(y)
+    l = @lines[k]
+    tx = x - @bounds.x - PADDING
+    i = @edit.index_near(c, l.start, l.stop, tx)
+    # The character under the pointer, not the nearest caret position; past the end
+    # of a line, its last character (an empty line: its line break).
+    i -= 1 if i > l.start && (i == l.stop || x_in(k, i, c) > tx)
+    @edit.select_word(i)
+    @upstream = false
     horizontal
   end
 
