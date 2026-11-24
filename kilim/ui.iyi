@@ -59,6 +59,11 @@ pub class Ui < Context
   end
 
   pub def needs_frame? : Bool
+    @paint_pending || needs_layout?
+  end
+
+  # Something changed what the widgets measure or where they sit (hover alone only repaints).
+  def needs_layout? : Bool
     return true if @root.needs_frame
     if m = @modal
       return true if m.needs_frame
@@ -154,26 +159,33 @@ pub class Ui < Context
     o.layout(Rect.new(x, y, w, s.h), @canvas)
   end
 
-  # Does layout + drawing if needed; true if it drew.
-  pub def frame : Bool
-    # Timer and inbox handlers change the tree outside dispatch: no ghost popup, modal or focus.
-    sanitize
-    return false unless needs_frame?
+  # Lays out what changed since the last layout; the drawing waits for frame.
+  # dispatch calls it before hit-testing, so a batch of mouse events that arrives
+  # before the next frame hits the tree as it is now, not the last drawn one.
+  def layout_pending : Nil
+    return unless needs_layout?
     @root.needs_frame = false
     @root.layout(Rect.new(0_f32, 0_f32, @w, @h), @canvas)
     layout_modal
     layout_overlay
-    # Content moved under a resting pointer; draw already shows the right hover.
-    if @mouse
-      set_hover(hit_at(@mx, @my))
-      @root.needs_frame = false
-    end
     if m = @modal
       m.needs_frame = false
     end
     if o = @overlay
       o.needs_frame = false
     end
+    @paint_pending = true
+  end
+
+  # Does layout + drawing if needed; true if it drew.
+  pub def frame : Bool
+    # Timer and inbox handlers change the tree outside dispatch: no ghost popup, modal or focus.
+    sanitize
+    return false unless needs_frame?
+    layout_pending
+    # Content moved under a resting pointer; draw already shows the right hover.
+    set_hover(hit_at(@mx, @my)) if @mouse
+    @paint_pending = false
     @canvas.fill_rect(Rect.new(0_f32, 0_f32, @w, @h), BG)
     @root.draw(@canvas)
     if m = @modal
@@ -245,6 +257,7 @@ pub class Ui < Context
     sanitize
     case e
     when MouseMove
+      layout_pending
       remember(e.x, e.y)
       set_hover(hit_at(e.x, e.y))
       # A held button means a drag: the capturing widget follows the pointer.
@@ -252,6 +265,7 @@ pub class Ui < Context
         c.handle(e, self)
       end
     when MouseDown
+      layout_pending
       remember(e.x, e.y)
       set_hover(hit_at(e.x, e.y))
       if @overlay && !(@hovered && in_overlay?(@hovered))
@@ -276,6 +290,7 @@ pub class Ui < Context
         @captured = nil
       end
     when Wheel
+      layout_pending
       remember(e.x, e.y)
       if @overlay
         # Scrolling would leave the popup behind its owner: close it, and swallow the wheel.
@@ -393,7 +408,7 @@ pub class Ui < Context
     if n = w
       n.hovered = true
     end
-    @root.needs_frame = true
+    @paint_pending = true
   end
 
   # Widgets detached from the tree must not stay in hover/capture/focus.
@@ -435,6 +450,8 @@ pub class Ui < Context
   @mx : Float32
   @my : Float32
   @mouse : Bool
+  # Laid out (or hover moved) since the last drawing.
+  @paint_pending : Bool = false
   @canvas : Canvas
   @w : Float32
   @h : Float32

@@ -1,0 +1,50 @@
+# A mouse event that arrives before the next frame hits the tree as it is now:
+# Ui lays out a changed tree before hit-testing, not only when it draws.
+
+module test/hit_layout_test
+
+import kilim/event::*
+import kilim/widget::*
+import kilim/box::*
+import kilim/ui::{Ui}
+import kilim/button::{Button}
+import kilim/testing::*
+
+def main : Int32
+  clicked = ""
+  a = Button.new("a", -> { clicked = "a"; nil })
+  b = Button.new("b", -> { clicked = "b"; nil })
+  col = Box.new(Axis::Column, [a, b] of Widget)
+  rc = RecordCanvas.new
+  ui = Ui.new(col, rc, MemoryClipboard.new)
+  ui.resize(300_f32, 200_f32)
+  ui.frame
+
+  # a goes away; b moves up under the pointer, but no frame has run yet.
+  x = a.bounds.x + 2
+  y = a.bounds.y + 2
+  col.remove(a)
+  ui.dispatch MouseMove.new(x, y)
+  expect ui.hovered == b, "the move hits b where it is now"
+  ui.dispatch MouseDown.new(x, y, MouseButton::Left)
+  ui.dispatch MouseUp.new(x, y, MouseButton::Left)
+  expect_eq clicked, "b", "the click goes to b, not to a's old place"
+
+  # The batch was laid out already, so the frame only draws; it still draws.
+  rc.calls.clear
+  expect ui.needs_frame?, "a frame is still due after layout without drawing"
+  expect ui.frame, "the frame draws"
+  expect !rc.calls.empty?, "something was drawn"
+  expect !ui.needs_frame?, "nothing due after the frame"
+
+  # Hover alone does not lay out again: it only repaints.
+  ui.dispatch MouseMove.new(250_f32, 190_f32)
+  expect ui.hovered == col, "the pointer is over the column"
+  expect ui.needs_frame?, "a hover change repaints"
+  ui.frame
+
+  puts "hit layout ok"
+  0
+end
+
+exit main
