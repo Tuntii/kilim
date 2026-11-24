@@ -23,9 +23,19 @@ import std/shared_proc::{SharedProc}
   def primary_down?(mod : UInt16) : Bool
     mod & LibSDL3::KMOD_GUI != 0
   end
+
+  # Word-wise arrows: Option on macOS.
+  def word_down?(mod : UInt16) : Bool
+    mod & LibSDL3::KMOD_ALT != 0
+  end
 {% else %}
   def primary_down?(mod : UInt16) : Bool
     mod & LibSDL3::KMOD_CTRL != 0 && mod & LibSDL3::KMOD_ALT == 0
+  end
+
+  # Word-wise arrows: Ctrl, as for shortcuts.
+  def word_down?(mod : UInt16) : Bool
+    primary_down?(mod)
   end
 {% end %}
 
@@ -237,7 +247,7 @@ pub class SdlWindow
       b = ev.as(LibSDL3::MouseButtonEvent*).value
       if button = mouse_button(b.button)
         if b.down
-          @ui.dispatch MouseDown.new(b.x, b.y, button)
+          @ui.dispatch MouseDown.new(b.x, b.y, button, b.clicks.to_i)
         else
           @ui.dispatch MouseUp.new(b.x, b.y, button)
         end
@@ -250,7 +260,7 @@ pub class SdlWindow
       @ui.dispatch Wheel.new(wh.mouse_x, wh.mouse_y, wh.y)
     when LibSDL3::EVENT_KEY_DOWN
       k = ev.as(LibSDL3::KeyboardEvent*).value
-      mods = Mods.new(shift: k.mod & LibSDL3::KMOD_SHIFT != 0, primary: primary_down?(k.mod))
+      mods = Mods.new(shift: k.mod & LibSDL3::KMOD_SHIFT != 0, primary: primary_down?(k.mod), word: word_down?(k.mod))
       @pacer.restart_blink(clock_ms)
       @ui.dispatch KeyDown.new(key(k.key), mods, k.repeat)
     when LibSDL3::EVENT_TEXT_INPUT

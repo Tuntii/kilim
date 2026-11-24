@@ -102,11 +102,24 @@ pub class Textbox < Widget
     @edit.index_near(c, 0, @edit.size, x - bounds.x - PADDING + @scroll_x)
   end
 
+  # The index of the character under logical x (not the nearest caret position).
+  def char_at(x : Float32) : Int32
+    i = index_at(x)
+    if c = @canvas
+      i -= 1 if i > 0 && bounds.x + PADDING - @scroll_x + c.measure(@edit.prefix(i)).w > x
+    end
+    i
+  end
+
   pub def handle(e : Event, ui : Context) : Bool
     case e
     when MouseDown
       return false unless e.button.left?
-      @edit.move_to(index_at(e.x), false)
+      if e.clicks >= 2
+        @edit.select_word(char_at(e.x))
+      else
+        @edit.move_to(index_at(e.x), false)
+      end
       changed
       true
     when MouseMove
@@ -126,9 +139,9 @@ pub class Textbox < Widget
       when Key::Delete
         @edit.delete
       when Key::Left
-        @edit.left(e.mods.shift)
+        e.mods.word ? @edit.word_left(e.mods.shift) : @edit.left(e.mods.shift)
       when Key::Right
-        @edit.right(e.mods.shift)
+        e.mods.word ? @edit.word_right(e.mods.shift) : @edit.right(e.mods.shift)
       when Key::Home
         @edit.home(e.mods.shift)
       when Key::End

@@ -1,0 +1,130 @@
+# Word-wise caret movement (Ctrl/Option+arrows) and double-click word selection.
+
+module test/word_test
+
+import kilim/event::*
+import kilim/widget::*
+import kilim/box::*
+import kilim/ui::{Ui}
+import kilim/textbox::{Textbox}
+import kilim/text_area::{TextArea}
+import kilim/text_edit::{TextEdit}
+import kilim/theme::*
+import kilim/testing::*
+
+NOTE = "first line\n\nthird word"
+
+def word_key(ui : Ui, k : Key, shift : Bool = false) : Nil
+  ui.dispatch KeyDown.new(k, Mods.new(shift: shift, primary: true, word: true))
+end
+
+def dbl(ui : Ui, x : Float32, y : Float32) : Nil
+  ui.dispatch MouseDown.new(x, y, MouseButton::Left)
+  ui.dispatch MouseUp.new(x, y, MouseButton::Left)
+  ui.dispatch MouseDown.new(x, y, MouseButton::Left, 2)
+  ui.dispatch MouseUp.new(x, y, MouseButton::Left)
+end
+
+# Typing "|" shows where the caret is (and replaces what is selected).
+def mark(ui : Ui) : Nil
+  ui.dispatch TextInput.new("|")
+end
+
+def main : Int32
+  # TextEdit: words are letters, digits, _ and non-ASCII letters (Turkish too).
+  ed = TextEdit.new
+  ed.set("hello, şöğüt world_2  end")
+  ed.word_left
+  expect_eq ed.cursor, 22, "word_left from the end: start of 'end'"
+  ed.word_left
+  expect_eq ed.cursor, 13, "skips the spaces: start of 'world_2'"
+  ed.word_left
+  expect_eq ed.cursor, 7, "'şöğüt' is one word"
+  ed.word_left
+  expect_eq ed.cursor, 0, "over ', ' to the start"
+  ed.word_left
+  expect_eq ed.cursor, 0, "stays at 0"
+  ed.word_right
+  expect_eq ed.cursor, 5, "word_right: end of 'hello'"
+  ed.word_right(true)
+  expect_eq ed.selected_text, ", şöğüt", "Shift extends over the next word"
+  ed.select_word(9)
+  expect_eq ed.selected_text, "şöğüt", "select_word on a Turkish word"
+  ed.select_word(21)
+  expect_eq ed.selected_text, "  ", "select_word on spaces selects the spaces"
+  ed.select_word(5)
+  expect_eq ed.selected_text, ",", "punctuation is its own run"
+  ed.select_word(99)
+  expect_eq ed.selected_text, "end", "past the end: the last word"
+  ed.set("a — b")
+  ed.select_word(2)
+  expect_eq ed.selected_text, "—", "a dash is not part of a word"
+  ed.set("")
+  ed.select_word(0)
+  expect_eq ed.selected_text, "", "empty text: nothing to select"
+
+  # Textbox: Ctrl (Option on macOS) + arrows, and a double-click.
+  tb = Textbox.new("", "one two three")
+  ui = Ui.new(Box.new(Axis::Column, [tb] of Widget), RecordCanvas.new, MemoryClipboard.new)
+  ui.resize(400_f32, 100_f32)
+  ui.frame
+  ui.focus(tb)
+  word_key(ui, Key::Left)
+  mark(ui)
+  expect_eq tb.text, "one two |three", "Ctrl+Left: start of 'three'"
+  word_key(ui, Key::Left, true)
+  mark(ui)
+  expect_eq tb.text, "one |three", "Ctrl+Shift+Left selects back over the mark and the space to the word start"
+  tb.text = "one two three"
+  ui.dispatch KeyDown.new(Key::Home, Mods.new)
+  word_key(ui, Key::Right)
+  word_key(ui, Key::Right)
+  mark(ui)
+  expect_eq tb.text, "one two| three", "Ctrl+Right: end of the next word"
+  ui.dispatch KeyDown.new(Key::Left, Mods.new)
+  mark(ui)
+  expect_eq tb.text, "one two|| three", "a plain Left still moves one character"
+  tb.text = "one two three"
+  # Right half of the 'o' at index 6 (8 px per character): still 'two'.
+  x = tb.bounds.x + PADDING - tb.scroll_x + 6 * 8 + 6
+  y = tb.bounds.y + tb.bounds.h / 2
+  dbl(ui, x, y)
+  mark(ui)
+  expect_eq tb.text, "one | three", "a double-click on a word's last letter selects the word"
+
+  # TextArea: the same, across lines.
+  ta = TextArea.new("", NOTE)
+  ui = Ui.new(Box.new(Axis::Column, [ta] of Widget), RecordCanvas.new, MemoryClipboard.new)
+  ui.resize(400_f32, 200_f32)
+  ui.frame
+  ui.focus(ta)
+  # The constructor leaves the caret at the end; text= puts it at 0.
+  ta.text = NOTE
+  word_key(ui, Key::Right)
+  word_key(ui, Key::Right)
+  word_key(ui, Key::Right)
+  mark(ui)
+  expect_eq ta.text, "first line\n\nthird| word", "Ctrl+Right over the empty line to the end of 'third'"
+  word_key(ui, Key::Left, true)
+  mark(ui)
+  expect_eq ta.text, "first line\n\n| word", "Ctrl+Shift+Left selects 'third|'"
+  x0 = ta.bounds.x + PADDING
+  top = ta.bounds.y + PADDING
+  ta.text = NOTE
+  dbl(ui, x0 + 7 * 8 + 2, top + 4)
+  mark(ui)
+  expect_eq ta.text, "first |\n\nthird word", "a double-click selects the word on line 0"
+  ta.text = NOTE
+  dbl(ui, x0 + 300, top + 2 * 16 + 4)
+  mark(ui)
+  expect_eq ta.text, "first line\n\nthird |", "past the end of a line: its last word"
+  ta.text = NOTE
+  dbl(ui, x0 + 40, top + 16 + 4)
+  mark(ui)
+  expect_eq ta.text, "first line\n|third word", "an empty line: only its line break"
+
+  puts "word ok"
+  0
+end
+
+exit main

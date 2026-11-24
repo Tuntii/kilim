@@ -54,6 +54,7 @@ pub class WinWindow
     inst = LibWin.GetModuleHandleW(Pointer(UInt16).new(0_u64))
     wc = LibWin::WndClassExW.new
     wc.cb_size = sizeof(LibWin::WndClassExW).to_u32
+    wc.style = CS_DBLCLKS
     # The window procedure: kilim's C -> iyi entry point. Not a closure; the window
     # is found through GWLP_USERDATA, set from CreateWindowExW's parameter.
     wc.wnd_proc = ->(hwnd : Void*, msg : UInt32, wp : UInt64, lp : Int64) do
@@ -216,6 +217,11 @@ pub class WinWindow
       LibWin.SetCapture(hwnd)
       @ui.dispatch MouseDown.new(lx(lp), ly(lp), button(msg))
       return 0_i64
+    when WM_LBUTTONDBLCLK, WM_RBUTTONDBLCLK, WM_MBUTTONDBLCLK
+      # CS_DBLCLKS: the second press of a double-click, in place of its BUTTONDOWN.
+      LibWin.SetCapture(hwnd)
+      @ui.dispatch MouseDown.new(lx(lp), ly(lp), button(msg), 2)
+      return 0_i64
     when WM_LBUTTONUP, WM_RBUTTONUP, WM_MBUTTONUP
       LibWin.ReleaseCapture
       @ui.dispatch MouseUp.new(lx(lp), ly(lp), button(msg))
@@ -231,8 +237,9 @@ pub class WinWindow
     when WM_KEYDOWN, WM_SYSKEYDOWN
       shift = LibWin.GetKeyState(VK_SHIFT) < 0
       @pacer.restart_blink(clock_ms)
+      prim = primary_down?
       # lParam bit 30: the key was already down, so this is an auto-repeat.
-      @ui.dispatch KeyDown.new(key(wp), Mods.new(shift: shift, primary: primary_down?), (lp >> 30) & 1 != 0)
+      @ui.dispatch KeyDown.new(key(wp), Mods.new(shift: shift, primary: prim, word: prim), (lp >> 30) & 1 != 0)
       # Alt+F4 and Alt+Space are the system's.
       return 0_i64 if msg == WM_KEYDOWN
     when WM_CHAR
@@ -365,8 +372,8 @@ pub class WinWindow
 
   def button(msg : UInt32) : MouseButton
     case msg
-    when WM_RBUTTONDOWN, WM_RBUTTONUP then MouseButton::Right
-    when WM_MBUTTONDOWN, WM_MBUTTONUP then MouseButton::Middle
+    when WM_RBUTTONDOWN, WM_RBUTTONUP, WM_RBUTTONDBLCLK then MouseButton::Right
+    when WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MBUTTONDBLCLK then MouseButton::Middle
     else                                   MouseButton::Left
     end
   end
