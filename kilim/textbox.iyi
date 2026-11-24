@@ -33,6 +33,29 @@ pub class Textbox < Widget
     changed
   end
 
+  # The caret as a character index.
+  pub def caret : Int32
+    @edit.cursor
+  end
+
+  # Moves the caret to character i (clamped to the text), drops the selection and scrolls
+  # the caret into view. Not a user edit: no on_change.
+  pub def caret=(i : Int32) : Nil
+    @edit.move_to(i, false)
+    changed
+  end
+
+  # The selected text; "" when nothing is selected.
+  pub def selected_text : String
+    @edit.selected_text
+  end
+
+  # Selects the whole text, as Ctrl/Cmd+A does (e.g. when focusing a search field).
+  pub def select_all : Nil
+    @edit.select_all
+    changed
+  end
+
   pub def focusable? : Bool
     true
   end

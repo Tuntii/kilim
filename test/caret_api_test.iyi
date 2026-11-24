@@ -1,0 +1,76 @@
+# Textbox and TextArea: caret, caret= and select_all from app code (no on_change),
+# e.g. replacing a text field's text without losing the caret.
+
+module test/caret_api_test
+
+import kilim/event::*
+import kilim/widget::*
+import kilim/box::*
+import kilim/ui::{Ui}
+import kilim/textbox::{Textbox}
+import kilim/text_area::{TextArea}
+import kilim/testing::*
+
+class Log
+  property n : Int32 = 0
+end
+
+def main : Int32
+  changes = Log.new
+  tb = Textbox.new("", "hello world", ->(_s : String) { changes.n += 1; nil })
+  ta = TextArea.new("", "line one\nline two", ->(_s : String) { changes.n += 1; nil })
+  ui = Ui.new(Box.new(Axis::Column, [tb, ta] of Widget), RecordCanvas.new, MemoryClipboard.new)
+  ui.resize(300_f32, 400_f32)
+  ui.frame
+
+  # Textbox
+  expect_eq tb.caret, 11, "a new text puts the caret at its end"
+  tb.caret = 5
+  expect_eq tb.caret, 5, "caret= moves the caret"
+  tb.caret = 99
+  expect_eq tb.caret, 11, "caret= clamps to the text"
+  tb.caret = -3
+  expect_eq tb.caret, 0, "caret= clamps at 0"
+  tb.select_all
+  expect_eq tb.selected_text, "hello world", "select_all"
+  tb.caret = 5
+  expect_eq tb.selected_text, "", "caret= drops the selection"
+  ui.focus(tb)
+  ui.dispatch TextInput.new("!")
+  expect_eq tb.text, "hello! world", "typing goes in at the caret that was set"
+  changes.n = 0
+
+  # TextArea: text= shows the start; caret= puts the caret back.
+  ta.caret = 13
+  expect_eq ta.caret, 13, "caret= moves the caret"
+  c = ta.caret
+  ta.text = "line one\nline 2"
+  expect_eq ta.caret, 0, "text= still starts at the top"
+  ta.caret = c
+  expect_eq ta.caret, 13, "caret= restores the caret after text="
+  ta.select_all
+  expect_eq ta.selected_text, "line one\nline 2", "select_all"
+  ui.focus(ta)
+  ui.dispatch KeyDown.new(Key::Right, Mods.new)
+  expect_eq ta.caret, 15, "Right after select_all collapses to the end"
+  expect_eq changes.n, 0, "caret=, select_all and text= are not user edits: no on_change"
+
+  # The caret is scrolled into view.
+  long = TextArea.new("", (1..50).map { |i| "row #{i}" }.join("\n"))
+  ui2 = Ui.new(Box.new(Axis::Column, [long] of Widget), RecordCanvas.new, MemoryClipboard.new)
+  ui2.resize(300_f32, 120_f32)
+  ui2.frame
+  long.caret = long.text.size
+  ui2.frame
+  expect long.offset > 0_f32, "caret= at the end scrolls down to it"
+  if r = long.caret_rect
+    expect r.y + r.h <= long.bounds.y + long.bounds.h, "the caret is inside the area"
+  else
+    expect false, "a laid-out text area has a caret_rect"
+  end
+
+  puts "caret api ok"
+  0
+end
+
+exit main

@@ -80,8 +80,8 @@ Built something with kilim? Open a pull request to add it here.
 | `label(text)` | Text; set `label.text = ...` to change it. |
 | `button(text, on_click:, sizing:)` | A clickable button. Space and Enter work when it has focus. |
 | `checkbox(text, checked:, on_change:, sizing:)` | A checkbox with a label. Checked items are drawn struck through. |
-| `textbox(placeholder, on_change:, on_submit:, sizing:)` | A single-line text field with copy and paste. |
-| `text_area(placeholder, on_change:, sizing:)` | A multi-line text field that wraps words and scrolls on its own. Enter starts a new line; Up, Down, Home and End move by visual line. |
+| `textbox(placeholder, on_change:, on_submit:, sizing:)` | A single-line text field with copy and paste. From code: `text =`, `caret` / `caret =` (a character index), `select_all` and `selected_text`; none of them calls `on_change`. |
+| `text_area(placeholder, on_change:, sizing:)` | A multi-line text field that wraps words and scrolls on its own. Enter starts a new line; Up, Down, Home and End move by visual line. `text =` shows the new text from its start; to keep the caret, `c = area.caret; area.text = s; area.caret = c`. It also has `select_all` and `selected_text`. |
 | `dropdown(options, selected:, on_change:, sizing:)` | Shows the chosen option; a click, Space or Enter opens the list as an overlay. Up and Down change the choice, Enter or a click picks, Escape or a click outside closes (that click does not reach the widget under it). |
 | `confirm(ui, title, message, ok_text, &on_ok)` | A modal confirmation: centred over a dimmed window, Cancel / `ok_text`. OK has the focus, so Enter confirms (Enter on a focused Cancel cancels); Escape cancels. Input behind it is ignored, Tab stays inside, window shortcuts do not fire, and focus goes back to the previous widget on close. The block runs after the dialog closes. Underneath: `Context#show_modal(widget)` / `#close_modal`; a dropdown inside a modal opens above it. |
 | `scroll(child, sizing:)` | A vertically scrolling viewport with a scrollbar. |
