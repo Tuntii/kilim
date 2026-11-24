@@ -110,23 +110,22 @@ seconds and `win.after(ms) { ... }` runs it once; both return an id for
 windows use no CPU, and the block runs on the UI thread and may change widgets.
 
 **Background work.** Slow work (a network sync, a file scan) runs in a
-`spawn_parallel` task and hands its result to the UI through an inbox:
+task of its own (`g.spawn(unit: :new)`) and hands its result to the UI through
+an inbox:
 
 ```iyi
 results = win.inbox(String) { |r| label.text = r; nil }   # handler: UI thread
 group do |g|
-  g.spawn_parallel { results.send(scan_files) }          # another thread
+  g.spawn(unit: :new) { results.send(scan_files) }       # another thread
   win.run
 end
 ```
 
 `send` wakes the loop, which passes each value to the handler, in send order.
-`send` is the only kilim call allowed from another thread: a parallel task
+`send` is the only kilim call allowed from another thread: such a task
 cannot touch the window or its widgets (the compiler refuses it), only the inbox.
 Sent values must be `Share`: strings, numbers, `Share` structs. After the window
-closes, sends are dropped. On Linux a send cannot wake the loop (iyi's worker
-threads there must not call C libraries such as SDL), so while a window has an
-inbox its loop checks for values every 10 ms instead.
+closes, sends are dropped.
 
 **Keyboard.** Tab and Shift+Tab move focus. In a textbox, use the arrow keys,
 Home/End, Backspace/Delete and Enter. Click and drag, or hold Shift with the
