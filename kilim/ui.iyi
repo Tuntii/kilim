@@ -164,15 +164,21 @@ pub class Ui < Context
   # before the next frame hits the tree as it is now, not the last drawn one.
   def layout_pending : Nil
     return unless needs_layout?
-    @root.needs_frame = false
-    @root.layout(Rect.new(0_f32, 0_f32, @w, @h), @canvas)
-    layout_modal
-    layout_overlay
-    if m = @modal
-      m.needs_frame = false
-    end
-    if o = @overlay
-      o.needs_frame = false
+    # A widget whose height follows the width it got (a wrapping label) invalidates
+    # itself during layout; the next pass gives it that height. Its width does not
+    # depend on its height, so a second pass settles it; the third is for nesting.
+    3.times do
+      break unless needs_layout?
+      @root.needs_frame = false
+      if m = @modal
+        m.needs_frame = false
+      end
+      if o = @overlay
+        o.needs_frame = false
+      end
+      @root.layout(Rect.new(0_f32, 0_f32, @w, @h), @canvas)
+      layout_modal
+      layout_overlay
     end
     @paint_pending = true
   end

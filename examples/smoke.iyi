@@ -65,10 +65,14 @@ def main : Int32
   n = Counter.new
   button = Button.new("OK", -> { n.n += 1; nil })
   title = Label.new("Merhaba şöğüt")
+  hint = Label.new("Bu uzun açıklama dar pencerede satırlara bölünür; şöğüt.", nil, true)
   notes = TextArea.new
-  root = Box.new(Axis::Column, [title, button, notes] of Widget, padding: PAD, spacing: 8_f32)
+  root = Box.new(Axis::Column, [title, hint, button, notes] of Widget, padding: PAD, spacing: 8_f32)
   win = Window.new("smoke", 320, 200, root)
   win.step
+  # A wrapping label: two or more lines in the first frame, and the button below it.
+  fail("the hint is #{hint.bounds.h} high, expected two lines (#{2 * title.bounds.h})") unless hint.bounds.h >= 2 * title.bounds.h
+  fail("the button overlaps the hint") unless button.bounds.y >= hint.bounds.y + hint.bounds.h
 
   win.inject KeyDown.new(Key::Tab, Mods.new)
   fail("Tab did not focus the button") unless button.focused

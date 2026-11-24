@@ -1,0 +1,66 @@
+# Label with wrap: true breaks into lines that fit its width, and the column it sits in
+# gives it the height of those lines in the same frame.
+
+module test/label_wrap_test
+
+import kilim/event::*
+import kilim/widget::*
+import kilim/box::*
+import kilim/ui::{Ui}
+import kilim/label::{Label}
+import kilim/button::{Button}
+import kilim/testing::*
+
+def main : Int32
+  # 8 px per character, 16 px per line. 100 px fits 12 characters.
+  text = "one two three four five six seven"
+  l = Label.new(text, nil, true)
+  b = Button.new("below")
+  col = Box.new(Axis::Column, [l, b] of Widget)
+  rc = RecordCanvas.new
+  ui = Ui.new(col, rc, MemoryClipboard.new)
+  ui.resize(100_f32, 300_f32)
+  expect ui.frame, "the first frame draws"
+  expect_eq l.bounds.h, 64_f32, "four lines of 16 px in the first frame"
+  expect_eq b.bounds.y, 64_f32, "the widget below starts under the last line"
+  drawn = rc.calls.select { |s| s.starts_with?("text 0.0,") }
+  expect_eq drawn, ["text 0.0,0.0,one two ", "text 0.0,16.0,three four ", "text 0.0,32.0,five six ", "text 0.0,48.0,seven"], "each line drawn where it belongs"
+  expect !ui.needs_frame?, "settled: no frame left over"
+
+  # Wider: fewer lines, the button moves up. 200 px fits 25 characters.
+  ui.resize(200_f32, 300_f32)
+  ui.frame
+  expect_eq l.bounds.h, 32_f32, "two lines at 200 px"
+  expect_eq b.bounds.y, 32_f32, "the button follows"
+
+  # New text re-wraps at the same width.
+  l.text = "short"
+  ui.frame
+  expect_eq l.bounds.h, 16_f32, "one line for a short text"
+
+  # A line break always breaks.
+  l.text = "a\nb"
+  ui.frame
+  expect_eq l.bounds.h, 32_f32, "\n starts a new line"
+
+  # Without wrap a label is one line, as before.
+  plain = Label.new(text)
+  ui2 = Ui.new(Box.new(Axis::Column, [plain] of Widget), RecordCanvas.new, MemoryClipboard.new)
+  ui2.resize(100_f32, 300_f32)
+  ui2.frame
+  expect_eq plain.bounds.h, 16_f32, "a plain label does not wrap"
+
+  # In a row a wrapping label asks for at most TEXTBOX_MIN_W (120 px = 15 characters).
+  wl = Label.new(text, nil, true)
+  row = Box.new(Axis::Row, [wl, Button.new("x")] of Widget)
+  ui3 = Ui.new(Box.new(Axis::Column, [row] of Widget), RecordCanvas.new, MemoryClipboard.new)
+  ui3.resize(600_f32, 300_f32)
+  ui3.frame
+  expect_eq wl.bounds.w, 120_f32, "a fit slot stays narrow"
+  expect_eq wl.bounds.h, 48_f32, "and the row grows to its three lines"
+
+  puts "label wrap ok"
+  0
+end
+
+exit main

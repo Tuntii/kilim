@@ -76,10 +76,14 @@ def main : Int32
   input = Textbox.new
   notes = TextArea.new
   title = Label.new("Merhaba şöğüt")
+  hint = Label.new("Bu uzun açıklama dar pencerede satırlara bölünür; şöğüt.", nil, true)
   status = Dropdown.new(["To do", "Doing", "Done"])
-  root = Box.new(Axis::Column, [title, button, input, notes, status] of Widget, padding: PAD, spacing: 8_f32)
+  root = Box.new(Axis::Column, [title, hint, button, input, notes, status] of Widget, padding: PAD, spacing: 8_f32)
   win = Window.new("smoke", 320, 200, root)
   win.step
+  # A wrapping label: two or more lines in the first frame, and the button below it.
+  fail("the hint is #{hint.bounds.h} high, expected two lines (#{2 * title.bounds.h})") unless hint.bounds.h >= 2 * title.bounds.h
+  fail("the button overlaps the hint") unless button.bounds.y >= hint.bounds.y + hint.bounds.h
   canvas = win.canvas
   fail("text is drawn in #{canvas.font_family}, expected the embedded Noto Sans") unless canvas.font_family == "Noto Sans"
 
