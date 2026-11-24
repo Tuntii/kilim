@@ -185,10 +185,13 @@ pub class Textbox < Widget
     right = bounds.w - PADDING
     @scroll_x = cx - right if cx - @scroll_x > right
     @scroll_x = cx - PADDING if cx - @scroll_x < PADDING
+    # Text that got shorter leaves no blank strip on the right while it is scrolled.
+    over = PADDING + c.measure(@edit.text).w - right
+    @scroll_x = over if @scroll_x > over
     @scroll_x = 0_f32 if @scroll_x < 0
   end
 
-  # "\r\n" and "\n" become a single space.
+  # "\r\n", "\r", "\n" and tab become a single space; other control characters are dropped.
   def one_line(s : String) : String
     cs = [] of Char
     s.each_char { |ch| cs << ch }
@@ -199,14 +202,20 @@ pub class Textbox < Widget
         if ch == '\r' && i + 1 < cs.size && cs[i + 1] == '\n'
           i += 1
           b << ' '
-        elsif ch == '\r' || ch == '\n'
+        elsif ch == '\r' || ch == '\n' || ch == '\t'
           b << ' '
-        else
+        elsif !control?(ch)
           b << ch
         end
         i += 1
       end
     end
+  end
+
+  # C0, DEL and C1: nothing a text box can show.
+  def control?(ch : Char) : Bool
+    o = ch.ord
+    o < 0x20 || (o >= 0x7f && o < 0xa0)
   end
 
   @placeholder : String
