@@ -34,8 +34,8 @@ pub def row(children : Array(Kilim::Widget::Widget) = [] of Kilim::Widget::Widge
   Kilim::Box::Box.new(Kilim::Box::Axis::Row, children, padding, spacing, sizing)
 end
 
-pub def label(text : String) : Kilim::Label::Label
-  Kilim::Label::Label.new(text)
+pub def label(text : String, wrap : Bool = false) : Kilim::Label::Label
+  Kilim::Label::Label.new(text, nil, wrap)
 end
 
 pub def button(text : String, on_click : (-> Nil)? = nil, sizing : Kilim::Widget::Sizing = Kilim::Widget::Sizing.fit) : Kilim::Button::Button

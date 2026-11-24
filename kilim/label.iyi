@@ -1,31 +1,82 @@
-# Read-only text.
+# Read-only text. With wrap: true it breaks into lines that fit the width it gets.
 
 module kilim/label
 
-import kilim/geom::{Size}
+import std/float
+import kilim/geom::{Rect, Size}
 import kilim/canvas::{Canvas, Color}
 import kilim/widget::*
+import kilim/wrap::{Line, wrap}
 import kilim/theme::*
 
 pub class Label < Widget
   getter text : String
+  # Breaks the text at spaces (and "\n") to fit the label's width; the label grows to
+  # as many lines as that takes. Give it its width: a column, or `fill` in a row. Asked
+  # how wide it wants to be, it says at most TEXTBOX_MIN_W, so a `fit` slot stays narrow.
+  getter wrap : Bool
 
-  def initialize(@text : String, color : Color? = nil)
+  def initialize(@text : String, color : Color? = nil, @wrap : Bool = false)
     @color = color || FG
   end
 
   pub def text=(s : String) : Nil
     @text = s
+    @wrap_w = -1_f32
+    invalidate
+  end
+
+  pub def wrap=(on : Bool) : Nil
+    @wrap = on
+    @wrap_w = -1_f32
     invalidate
   end
 
   pub def preferred(c : Canvas) : Size
-    c.measure(@text)
+    m = c.measure(@text)
+    return m unless @wrap
+    w = m.w < TEXTBOX_MIN_W ? m.w : TEXTBOX_MIN_W
+    # Until the first layout says how wide it is, one line.
+    n = @wrap_w < 0 ? 1 : @lines.size
+    Size.new(w, n * c.line_height)
+  end
+
+  pub def layout(r : Rect, c : Canvas) : Nil
+    @bounds = r
+    return unless @wrap
+    return if r.w == @wrap_w
+    @wrap_w = r.w
+    n = @lines.size
+    @lines = wrap(c, @text, r.w)
+    # More or fewer lines: the parent lays this out again with the new height.
+    invalidate if @lines.size != n || r.h < @lines.size * c.line_height
+  end
+
+  # A new font measures differently at the same width.
+  pub def drop_caches : Nil
+    super
+    @wrap_w = -1_f32
   end
 
   pub def draw(c : Canvas) : Nil
-    c.text(bounds.x, bounds.y, @text, @color)
+    unless @wrap
+      c.text(bounds.x, bounds.y, @text, @color)
+      return
+    end
+    lh = c.line_height
+    chars = [] of Char
+    @text.each_char { |ch| chars << ch }
+    y = bounds.y
+    @lines.each do |l|
+      line = Rect.new(bounds.x, y, bounds.w, lh)
+      if c.visible?(line)
+        c.text(bounds.x, y, String.build { |b| (l.start...l.stop).each { |i| b << chars[i] } }, @color)
+      end
+      y += lh
+    end
   end
 
   @color : Color
+  @wrap_w : Float32 = -1_f32
+  @lines : Array(Line) = [] of Line
 end
