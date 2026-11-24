@@ -40,6 +40,32 @@ pub class TextArea < Widget
     moved
   end
 
+  # The caret as a character index.
+  pub def caret : Int32
+    @edit.cursor
+  end
+
+  # Moves the caret to character i (clamped to the text), drops the selection and scrolls
+  # the caret into view. Not a user edit: no on_change. To replace the text without
+  # losing the caret: `c = area.caret; area.text = s; area.caret = c`.
+  pub def caret=(i : Int32) : Nil
+    @edit.move_to(i, false)
+    @upstream = false
+    horizontal
+  end
+
+  # The selected text; "" when nothing is selected.
+  pub def selected_text : String
+    @edit.selected_text
+  end
+
+  # Selects the whole text, as Ctrl/Cmd+A does.
+  pub def select_all : Nil
+    @edit.select_all
+    @upstream = false
+    horizontal
+  end
+
   pub def focusable? : Bool
     true
   end
@@ -288,9 +314,7 @@ pub class TextArea < Widget
         @edit.delete_selection
       when Key::A
         return false unless e.mods.primary
-        @edit.select_all
-        @upstream = false
-        horizontal
+        select_all
         return true
       when Key::V
         return false unless e.mods.primary
