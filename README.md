@@ -213,9 +213,22 @@ kilim is at **v0.1**: small, tested, and young. Not there yet:
 - mobile and web.
 
 Every change still redraws the whole window, but rows scrolled out of view are
-skipped, widget sizes are cached and rendered text is reused. On a Windows
-desktop a full frame of the to-do list takes about 0.4 ms with 100 rows,
-0.6 ms with 1,000 and 3 ms with 10,000 (19 ms, 184 ms and 1.8 s in v0.1.1).
+skipped, widget sizes are cached and rendered text is reused. Ship with
+`iyi build --release`: the optimiser makes kilim's own work five to seven
+times faster. Median milliseconds for one full frame of the to-do list on a
+Windows desktop, iyi 0.22.0 (`bench/core.iyi` is layout and drawing without a
+window; `bench/render.iyi` adds Direct2D and presenting to a real window):
+
+| rows | core, debug | core, `--release` | native window, debug | native window, `--release` |
+|---:|---:|---:|---:|---:|
+| 100 | 0.035 | 0.006 | 0.33 | 0.29 |
+| 1,000 | 0.30 | 0.045 | 0.79 | 0.36 |
+| 10,000 | 3.1 | 0.50 | 4.0 | 1.2 |
+
+Typing 50 characters into a 10,000-row window, with a frame after each, takes
+206 ms in a debug build and 64 ms with `--release` (1.8 s for one frame in
+v0.1.1). A release build of `examples/todo.iyi` takes about 9 s instead of 1.5 s
+and is 935 KB instead of 1.1 MB, so keep debug builds for day-to-day work.
 Partial redraws come next in the [roadmap](ROADMAP.md). Progress is tracked on the
 [project board](https://github.com/users/Tuntii/projects/4).
 

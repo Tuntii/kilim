@@ -30,7 +30,9 @@ From nothing to a window with a working button, in four steps.
 
    exit main
    ```
-4. Run it with `iyi run main.iyi`.
+4. Run it with `iyi run main.iyi`. To ship it, build an optimised binary:
+   `iyi build --release main.iyi -o counter` (about five times faster;
+   numbers in the [README](../README.md#status)).
 
 ## Next
 
