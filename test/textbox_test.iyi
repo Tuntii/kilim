@@ -131,6 +131,21 @@ def main : Int32
     expect_eq r.x, tb2.bounds.x + PADDING, "caret_rect follows Home"
   end
 
+  # Text that gets shorter while scrolled: no blank strip on the right.
+  ui2.dispatch KeyDown.new(Key::End, Mods.new)
+  5.times { ui2.dispatch KeyDown.new(Key::Left, Mods.new) }
+  5.times { ui2.dispatch KeyDown.new(Key::Delete, Mods.new) }
+  right = tb2.bounds.w - PADDING
+  expect_eq tb2.scroll_x, PADDING + rc.measure(tb2.text).w - right, "deleting the tail scrolls back so the text ends at the right edge"
+  tb2.text = "ab"
+  expect_eq tb2.scroll_x, 0_f32, "a short text= is not drawn scrolled"
+
+  # Paste: line breaks and tab become spaces, other control characters go.
+  mem.set("a\tb\u{7}c\r\nd\u{7f}\u{85}e\rf\ng")
+  tb2.text = ""
+  ui2.dispatch KeyDown.new(Key::V, Mods.new(false, true))
+  expect_eq tb2.text, "a bc de f g", "paste drops control characters"
+
   # blink and focus
   ui2.blink
   expect !tb2.caret_visible, "blink hides"
