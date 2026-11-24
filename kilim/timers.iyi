@@ -101,18 +101,19 @@ pub class Pacer
     wait
   end
 
-  # After a wait: idle is true when it ended by timeout (no input). Returns true when
-  # the caret should blink; a timer wake alone does not, and input restarts the deadline.
+  # After a wait: true when the caret should blink. It keeps its cadence whatever woke
+  # the loop, so a mouse drag or a stream of inbox values does not freeze it; only
+  # restart_blink (typing) moves the deadline. idle (the wait timed out) is no longer
+  # needed and stays for existing callers.
   pub def blink?(now_ms : Int64, text : Bool, idle : Bool) : Bool
-    if !idle
-      @blink_at = -1_i64
-      false
-    elsif text && @blink_at >= 0_i64 && now_ms >= @blink_at
-      @blink_at = now_ms + BLINK_MS
-      true
-    else
-      false
-    end
+    return false unless text && @blink_at >= 0_i64 && now_ms >= @blink_at
+    @blink_at = now_ms + BLINK_MS
+    true
+  end
+
+  # A key or typed text: the caret stays on for a full interval before it blinks again.
+  pub def restart_blink(now_ms : Int64) : Nil
+    @blink_at = now_ms + BLINK_MS if @blink_at >= 0_i64
   end
 
   @timers : Timers

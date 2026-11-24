@@ -104,7 +104,7 @@ pub class Dropdown < Widget
         case e.key
         when Key::Up    then move_highlight(-1)
         when Key::Down  then move_highlight(1)
-        when Key::Enter, Key::Space then pick(@highlight, ui)
+        when Key::Enter, Key::Space then pick(@highlight, ui) unless e.repeat
         else
           return false
         end
@@ -113,7 +113,7 @@ pub class Dropdown < Widget
         case e.key
         when Key::Up    then choose(@selected - 1)
         when Key::Down  then choose(@selected + 1)
-        when Key::Enter, Key::Space then open(ui)
+        when Key::Enter, Key::Space then open(ui) unless e.repeat
         else
           return false
         end

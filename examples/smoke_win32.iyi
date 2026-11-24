@@ -98,6 +98,10 @@ def main : Int32
   post(win, WM_KEYDOWN, VK_RETURN, 1_i64)
   win.step
   fail("counter after click + Enter is #{n.n}, expected 3") unless n.n == 3
+  # A held key: lParam bit 30 marks the auto-repeat, which must not click again.
+  post(win, WM_KEYDOWN, VK_RETURN, 1_i64 | (1_i64 << 30))
+  win.step
+  fail("a repeated Enter clicked (counter #{n.n}, expected 3)") unless n.n == 3
 
   # Shortcuts. A posted WM_KEYDOWN cannot set Ctrl for GetKeyState, so Ctrl+N is
   # injected; a plain posted letter proves the VK -> Key::<letter> mapping.

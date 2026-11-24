@@ -56,7 +56,7 @@ pub class Checkbox < Widget
       true
     when KeyDown
       return false unless e.key.space?
-      toggle
+      toggle unless e.repeat
       true
     else
       false

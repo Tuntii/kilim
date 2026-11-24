@@ -1,0 +1,83 @@
+# A held key repeats: one-shot actions (click, toggle, open, pick, submit, a dialog's
+# Enter) act on the first press only; typing and caret keys act on every repeat.
+
+module test/key_repeat_test
+
+import kilim/event::*
+import kilim/widget::*
+import kilim/box::*
+import kilim/ui::{Ui}
+import kilim/button::{Button}
+import kilim/checkbox::{Checkbox}
+import kilim/dropdown::{Dropdown}
+import kilim/textbox::{Textbox}
+import kilim/dialog::{confirm}
+import kilim/testing::*
+
+class Log
+  property n : Int32 = 0
+end
+
+def held(ui : Ui, k : Key, times : Int32) : Nil
+  ui.dispatch KeyDown.new(k, Mods.new)
+  times.times { ui.dispatch KeyDown.new(k, Mods.new, true) }
+end
+
+def ui_for(w : Widget) : Ui
+  ui = Ui.new(Box.new(Axis::Column, [w] of Widget), RecordCanvas.new, MemoryClipboard.new)
+  ui.resize(300_f32, 200_f32)
+  ui.frame
+  ui.focus(w)
+  ui
+end
+
+def main : Int32
+  log = Log.new
+  b = Button.new("b", -> { log.n += 1; nil })
+  ui = ui_for(b)
+  held(ui, Key::Space, 5)
+  held(ui, Key::Enter, 5)
+  expect_eq log.n, 2, "a held Space or Enter clicks once each"
+
+  cb = Checkbox.new("c")
+  ui = ui_for(cb)
+  held(ui, Key::Space, 5)
+  expect cb.checked, "a held Space toggles once"
+
+  d = Dropdown.new(["a", "b", "c"], 0)
+  ui = ui_for(d)
+  held(ui, Key::Space, 3)
+  expect !ui.overlay.nil?, "a held Space opens the dropdown and leaves it open"
+  held(ui, Key::Down, 1)
+  held(ui, Key::Enter, 3)
+  expect_eq d.selected, 2, "Down repeats; Enter picks once"
+  expect ui.overlay.nil?, "the pick closed the list"
+
+  submits = Log.new
+  tb = Textbox.new("", "abc", nil, ->(_s : String) { submits.n += 1; nil })
+  ui = ui_for(tb)
+  held(ui, Key::Enter, 4)
+  expect_eq submits.n, 1, "a held Enter submits once"
+  held(ui, Key::Backspace, 1)
+  expect_eq tb.text, "a", "Backspace repeats"
+  ui.dispatch TextInput.new("x")
+  expect_eq tb.text, "ax", "typing still works"
+
+  # Enter held on the button that opens a dialog: the repeat must not confirm it.
+  oks = Log.new
+  root = Box.new(Axis::Column)
+  ui = Ui.new(root, RecordCanvas.new, MemoryClipboard.new)
+  opener = Button.new("Delete", -> { confirm(ui, "Delete", "Delete this task?", "Delete") { oks.n += 1; nil }; nil })
+  root.add(opener)
+  ui.resize(300_f32, 200_f32)
+  ui.frame
+  ui.focus(opener)
+  held(ui, Key::Enter, 5)
+  expect !ui.modal.nil?, "the dialog is still open"
+  expect_eq oks.n, 0, "a held Enter does not confirm the dialog it opened"
+
+  puts "key repeat ok"
+  0
+end
+
+exit main

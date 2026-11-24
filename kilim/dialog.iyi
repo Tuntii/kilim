@@ -63,7 +63,7 @@ pub class Dialog < Box
       @done.call(false)
       true
     elsif e.key.enter?
-      @done.call(true)
+      @done.call(true) unless e.repeat
       true
     else
       false
